@@ -1,8 +1,43 @@
+# Dependencies
 node_modules/
+
+# Production and build outputs
 build/
 dist/
+dist-electron/
+dist-app/
+release/
 coverage/
+
+# OS and temporary files
 .DS_Store
+Thumbs.db
 *.log
+*.tmp
+*.zip
+
+# Environment variables
 .env*
 !.env.example
+
+# IDE & Editor files
+.vscode/
+.idea/
+
+# Python virtual environments & bytecode (root & subdirectories)
+venv/
+.venv/
+**/venv/
+**/.venv/
+__pycache__/
+**/__pycache__/
+*.py[cod]
+
+# Machine learning model weights & checkpoints (never commit heavy binaries to Git)
+*.pth
+*.pt
+*.index
+*.onnx
+*.safetensors
+model/
+!python-backend/model/.gitkeep

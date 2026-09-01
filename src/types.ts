@@ -18,7 +18,13 @@ export interface TTSVoiceOption {
   displayName: string;
 }
 
+export type TTSProvider = 'browser' | 'rvc-local';
+
+export type RVCServerStatus = 'unknown' | 'checking' | 'connected' | 'unreachable';
+
 export interface TTSSettings {
+  ttsProvider: TTSProvider;
+  rvcServerUrl: string;
   voiceURI: string;
   rate: number; // 0.5 to 3.0
   pitch: number; // 0.5 to 2.0

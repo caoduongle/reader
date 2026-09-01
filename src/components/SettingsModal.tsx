@@ -16,6 +16,9 @@ import {
   EyeOff,
   Eye,
   Activity,
+  Server,
+  AlertCircle,
+  RefreshCw,
 } from 'lucide-react';
 import {
   TTSSettings,
@@ -24,6 +27,7 @@ import {
   FontFamily,
   HighlightStyle,
   MascotType,
+  RVCServerStatus,
 } from '../types';
 import { THEMES, FONT_FAMILIES } from '../utils/themeStyles';
 
@@ -32,6 +36,9 @@ interface SettingsModalProps {
   onClose: () => void;
   settings: TTSSettings;
   voices: TTSVoiceOption[];
+  rvcServerStatus?: RVCServerStatus;
+  serverErrorMessage?: string | null;
+  onCheckRVCHealth?: (url?: string) => Promise<boolean>;
   onSaveSettings: (newSettings: TTSSettings) => void;
   onTestVoice: (voiceURI: string, rate: number, pitch: number, volume: number) => void;
 }
@@ -53,6 +60,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onClose,
   settings,
   voices,
+  rvcServerStatus,
+  serverErrorMessage,
+  onCheckRVCHealth,
   onSaveSettings,
   onTestVoice,
 }) => {
@@ -61,13 +71,39 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [voiceSearch, setVoiceSearch] = useState('');
   const [selectedLangFilter, setSelectedLangFilter] = useState<string>('all');
   const [showSavedFeedback, setShowSavedFeedback] = useState(false);
+  const [internalRVCStatus, setInternalRVCStatus] = useState<RVCServerStatus>(
+    rvcServerStatus || 'unknown'
+  );
+  const [isCheckingHealth, setIsCheckingHealth] = useState(false);
 
   // Synchronize local settings when modal opens
   React.useEffect(() => {
     if (isOpen) {
       setLocalSettings(settings);
+      if (rvcServerStatus) {
+        setInternalRVCStatus(rvcServerStatus);
+      }
     }
-  }, [isOpen, settings]);
+  }, [isOpen, settings, rvcServerStatus]);
+
+  const handleCheckHealth = async () => {
+    setIsCheckingHealth(true);
+    setInternalRVCStatus('checking');
+    if (onCheckRVCHealth) {
+      const ok = await onCheckRVCHealth(localSettings.rvcServerUrl);
+      setInternalRVCStatus(ok ? 'connected' : 'unreachable');
+    } else {
+      try {
+        const cleanUrl = (localSettings.rvcServerUrl || 'http://localhost:8008').replace(/\/+$/, '');
+        const res = await fetch(`${cleanUrl}/health`);
+        const data = await res.json();
+        setInternalRVCStatus(data.ok ? 'connected' : 'unreachable');
+      } catch {
+        setInternalRVCStatus('unreachable');
+      }
+    }
+    setIsCheckingHealth(false);
+  };
 
   // Extract unique languages for tabs/filter
   const languageCategories = useMemo(() => {
@@ -325,133 +361,285 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
               </div>
 
-              {/* Voice Selector Section */}
-              <div className="space-y-3">
+              {/* VOICE PROVIDER SELECTION */}
+              <div className="p-4 rounded-2xl bg-[#16161A] border border-white/10 space-y-3">
                 <div className="flex items-center justify-between">
-                  <label className="text-sm font-semibold text-white flex items-center space-x-2">
-                    <Globe className="w-4 h-4 text-amber-500" />
-                    <span>Select Speech Voice ({voices.length} detected)</span>
-                  </label>
-                  <button
-                    id="test-voice-btn"
-                    onClick={handleTestCurrentVoice}
-                    className="px-3 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded-lg text-xs font-semibold flex items-center space-x-1.5 transition-colors border border-amber-500/30 cursor-pointer"
-                  >
-                    <Play className="w-3 h-3 fill-amber-300" />
-                    <span>Test Voice</span>
-                  </button>
-                </div>
-
-                {/* Voice Search & Language Filter Chips */}
-                <div className="space-y-2">
-                  <div className="relative">
-                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input
-                      id="voice-search-input"
-                      type="text"
-                      placeholder="Search voice name or language (e.g., Natural, Vietnamese, English, Google)..."
-                      value={voiceSearch}
-                      onChange={(e) => setVoiceSearch(e.target.value)}
-                      className="w-full pl-9 pr-3 py-2 bg-white/5 border border-white/10 rounded-xl text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-500"
-                    />
+                  <div className="flex items-center space-x-2">
+                    <Volume2 className="w-4 h-4 text-amber-500" />
+                    <div>
+                      <span className="text-sm font-bold text-white">Nguồn giọng đọc (TTS Provider)</span>
+                      <span className="text-xs text-slate-400 ml-2">Chọn engine phát âm thanh</span>
+                    </div>
                   </div>
 
-                  {/* Language filter quick chips */}
-                  <div className="flex flex-wrap gap-1.5 max-h-20 overflow-y-auto py-1">
+                  {localSettings.ttsProvider === 'rvc-local' && (
+                    <div className="flex items-center space-x-2">
+                      <span
+                        className={`w-2.5 h-2.5 rounded-full ${
+                          internalRVCStatus === 'connected'
+                            ? 'bg-emerald-500 ring-2 ring-emerald-500/30'
+                            : internalRVCStatus === 'checking'
+                            ? 'bg-amber-500 animate-pulse'
+                            : 'bg-rose-500 ring-2 ring-rose-500/30'
+                        }`}
+                      />
+                      <span className="text-xs font-mono text-slate-300">
+                        {internalRVCStatus === 'connected'
+                          ? 'Đã kết nối'
+                          : internalRVCStatus === 'checking'
+                          ? 'Đang kiểm tra...'
+                          : 'Chưa kết nối'}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    id="provider-browser-btn"
+                    onClick={() => setLocalSettings({ ...localSettings, ttsProvider: 'browser' })}
+                    className={`p-3 rounded-xl border text-left transition-all flex items-center justify-between cursor-pointer ${
+                      localSettings.ttsProvider === 'browser'
+                        ? 'bg-amber-600/20 border-amber-500 text-white font-bold ring-1 ring-amber-500/40'
+                        : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
+                    }`}
+                  >
+                    <div>
+                      <div className="text-xs font-semibold text-white">Giọng máy (mặc định)</div>
+                      <div className="text-[10px] text-slate-400">Giọng Web Speech của trình duyệt/hệ thống</div>
+                    </div>
+                    {localSettings.ttsProvider === 'browser' && <Check className="w-4 h-4 text-amber-400" />}
+                  </button>
+
+                  <button
+                    type="button"
+                    id="provider-rvc-btn"
+                    onClick={() => {
+                      setLocalSettings({ ...localSettings, ttsProvider: 'rvc-local' });
+                      handleCheckHealth();
+                    }}
+                    className={`p-3 rounded-xl border text-left transition-all flex items-center justify-between cursor-pointer ${
+                      localSettings.ttsProvider === 'rvc-local'
+                        ? 'bg-amber-600/20 border-amber-500 text-white font-bold ring-1 ring-amber-500/40'
+                        : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
+                    }`}
+                  >
+                    <div>
+                      <div className="text-xs font-semibold text-white">Giọng của tôi (RVC local)</div>
+                      <div className="text-[10px] text-slate-400">Voice cloning từ server Python local</div>
+                    </div>
+                    {localSettings.ttsProvider === 'rvc-local' && <Check className="w-4 h-4 text-amber-400" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* RVC LOCAL SERVER SETTINGS */}
+              {localSettings.ttsProvider === 'rvc-local' ? (
+                <div className="p-4 rounded-2xl bg-[#16161A] border border-white/10 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-semibold text-white flex items-center space-x-2">
+                      <Server className="w-4 h-4 text-amber-500" />
+                      <span>Cấu hình Server RVC Local</span>
+                    </label>
                     <button
-                      onClick={() => setSelectedLangFilter('all')}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
-                        selectedLangFilter === 'all'
-                          ? 'bg-amber-600 text-black font-bold'
-                          : 'bg-white/5 text-slate-400 hover:text-white'
-                      }`}
+                      id="test-rvc-voice-btn"
+                      onClick={handleTestCurrentVoice}
+                      className="px-3 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded-lg text-xs font-semibold flex items-center space-x-1.5 transition-colors border border-amber-500/30 cursor-pointer"
                     >
-                      All ({voices.length})
+                      <Play className="w-3 h-3 fill-amber-300" />
+                      <span>Thử giọng</span>
                     </button>
-                    {languageCategories.map((cat) => (
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="text-xs text-slate-300">Địa chỉ Server RVC (URL):</div>
+                    <div className="flex gap-2">
+                      <input
+                        id="rvc-server-url-input"
+                        type="text"
+                        value={localSettings.rvcServerUrl}
+                        onChange={(e) =>
+                          setLocalSettings({ ...localSettings, rvcServerUrl: e.target.value })
+                        }
+                        placeholder="http://localhost:8008"
+                        className="flex-1 px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-xs font-mono text-slate-200 focus:outline-none focus:border-amber-500"
+                      />
                       <button
-                        key={cat.code}
-                        onClick={() => setSelectedLangFilter(cat.code)}
+                        type="button"
+                        onClick={handleCheckHealth}
+                        disabled={isCheckingHealth}
+                        className="px-3 py-2 bg-white/10 hover:bg-white/15 text-slate-200 rounded-xl text-xs font-semibold flex items-center space-x-1.5 border border-white/10 transition-colors disabled:opacity-50 cursor-pointer"
+                        title="Kiểm tra kết nối tới server"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${isCheckingHealth ? 'animate-spin text-amber-400' : ''}`} />
+                        <span>Kiểm tra</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Warning banner when unreachable */}
+                  {internalRVCStatus === 'unreachable' && (
+                    <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-start space-x-2.5 text-xs text-rose-300">
+                      <AlertCircle className="w-4 h-4 shrink-0 text-rose-400 mt-0.5" />
+                      <div className="space-y-1">
+                        <div className="font-semibold text-rose-200">
+                          Không kết nối được server giọng đọc tại {localSettings.rvcServerUrl || 'http://localhost:8008'}
+                        </div>
+                        <div className="text-[11px] text-rose-300/80">
+                          Server Python có đang chạy không? Hãy kiểm tra hoặc chạy:
+                          <code className="mx-1 px-1.5 py-0.5 bg-black/40 rounded text-amber-300 font-mono">
+                            python python-backend/server.py
+                          </code>
+                          hoặc chuyển về &quot;Giọng máy (mặc định)&quot; để tiếp tục đọc sách.
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Info notice when connected */}
+                  {internalRVCStatus === 'connected' && (
+                    <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center space-x-2 text-xs text-emerald-300">
+                      <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <span>Server RVC đã sẵn sàng! Giọng đọc cá nhân hóa sẽ được áp dụng tự động khi phát sách.</span>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* Voice Selector Section (Browser Voices) */
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-semibold text-white flex items-center space-x-2">
+                      <Globe className="w-4 h-4 text-amber-500" />
+                      <span>Select Speech Voice ({voices.length} detected)</span>
+                    </label>
+                    <button
+                      id="test-voice-btn"
+                      onClick={handleTestCurrentVoice}
+                      className="px-3 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded-lg text-xs font-semibold flex items-center space-x-1.5 transition-colors border border-amber-500/30 cursor-pointer"
+                    >
+                      <Play className="w-3 h-3 fill-amber-300" />
+                      <span>Test Voice</span>
+                    </button>
+                  </div>
+
+                  {/* Voice Search & Language Filter Chips */}
+                  <div className="space-y-2">
+                    <div className="relative">
+                      <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        id="voice-search-input"
+                        type="text"
+                        placeholder="Search voice name or language (e.g., Natural, Vietnamese, English, Google)..."
+                        value={voiceSearch}
+                        onChange={(e) => setVoiceSearch(e.target.value)}
+                        className="w-full pl-9 pr-3 py-2 bg-white/5 border border-white/10 rounded-xl text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                      />
+                    </div>
+
+                    {/* Language filter quick chips */}
+                    <div className="flex flex-wrap gap-1.5 max-h-20 overflow-y-auto py-1">
+                      <button
+                        onClick={() => setSelectedLangFilter('all')}
                         className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
-                          selectedLangFilter === cat.code
+                          selectedLangFilter === 'all'
                             ? 'bg-amber-600 text-black font-bold'
                             : 'bg-white/5 text-slate-400 hover:text-white'
                         }`}
                       >
-                        {cat.label} ({cat.count})
+                        All ({voices.length})
                       </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Voice Dropdown / Select List */}
-                <div className="max-h-44 overflow-y-auto rounded-xl border border-white/10 bg-[#0A0A0B] p-1.5 space-y-1">
-                  {filteredVoices.length === 0 ? (
-                    <div className="text-center py-6 text-xs text-slate-500">
-                      No voices found matching &quot;{voiceSearch}&quot;.
-                    </div>
-                  ) : (
-                    filteredVoices.map((v) => {
-                      const isSelected = localSettings.voiceURI === v.voiceURI;
-                      return (
-                        <div
-                          key={v.voiceURI || v.name}
-                          onClick={() => setLocalSettings({ ...localSettings, voiceURI: v.voiceURI })}
-                          className={`p-2.5 rounded-lg flex items-center justify-between cursor-pointer text-xs transition-colors ${
-                            isSelected
-                              ? 'bg-white/10 border border-amber-500/60 text-white font-medium'
-                              : 'hover:bg-white/5 text-slate-300'
+                      {languageCategories.map((cat) => (
+                        <button
+                          key={cat.code}
+                          onClick={() => setSelectedLangFilter(cat.code)}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                            selectedLangFilter === cat.code
+                              ? 'bg-amber-600 text-black font-bold'
+                              : 'bg-white/5 text-slate-400 hover:text-white'
                           }`}
                         >
-                          <div className="flex items-center space-x-2.5 min-w-0">
-                            <Radio
-                              className={`w-3.5 h-3.5 shrink-0 ${
-                                isSelected ? 'text-amber-500' : 'text-slate-600'
-                              }`}
-                            />
-                            <div className="truncate">
-                              <span className="font-semibold text-white">{v.name}</span>
-                              <span className="ml-2 font-mono text-[11px] text-slate-500">
-                                [{v.lang}]
-                              </span>
-                              {v.genderGuess !== 'Neutral' && (
-                                <span className="ml-2 px-1.5 py-0.2 rounded text-[10px] bg-white/10 text-slate-400">
-                                  {v.genderGuess}
-                                </span>
-                              )}
-                            </div>
-                          </div>
+                          {cat.label} ({cat.count})
+                        </button>
+                      ))}
+                    </div>
+                  </div>
 
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setLocalSettings({ ...localSettings, voiceURI: v.voiceURI });
-                              onTestVoice(
-                                v.voiceURI,
-                                localSettings.rate,
-                                localSettings.pitch,
-                                localSettings.volume
-                              );
-                            }}
-                            title="Preview this voice"
-                            className="p-1 hover:bg-amber-500/30 rounded text-amber-400 shrink-0 ml-2"
+                  {/* Voice Dropdown / Select List */}
+                  <div className="max-h-44 overflow-y-auto rounded-xl border border-white/10 bg-[#0A0A0B] p-1.5 space-y-1">
+                    {filteredVoices.length === 0 ? (
+                      <div className="text-center py-6 text-xs text-slate-500">
+                        No voices found matching &quot;{voiceSearch}&quot;.
+                      </div>
+                    ) : (
+                      filteredVoices.map((v) => {
+                        const isSelected = localSettings.voiceURI === v.voiceURI;
+                        return (
+                          <div
+                            key={v.voiceURI || v.name}
+                            onClick={() => setLocalSettings({ ...localSettings, voiceURI: v.voiceURI })}
+                            className={`p-2.5 rounded-lg flex items-center justify-between cursor-pointer text-xs transition-colors ${
+                              isSelected
+                                ? 'bg-white/10 border border-amber-500/60 text-white font-medium'
+                                : 'hover:bg-white/5 text-slate-300'
+                            }`}
                           >
-                            <Play className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      );
-                    })
-                  )}
+                            <div className="flex items-center space-x-2.5 min-w-0">
+                              <Radio
+                                className={`w-3.5 h-3.5 shrink-0 ${
+                                  isSelected ? 'text-amber-500' : 'text-slate-600'
+                                }`}
+                              />
+                              <div className="truncate">
+                                <span className="font-semibold text-white">{v.name}</span>
+                                <span className="ml-2 font-mono text-[11px] text-slate-500">
+                                  [{v.lang}]
+                                </span>
+                                {v.genderGuess !== 'Neutral' && (
+                                  <span className="ml-2 px-1.5 py-0.2 rounded text-[10px] bg-white/10 text-slate-400">
+                                    {v.genderGuess}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setLocalSettings({ ...localSettings, voiceURI: v.voiceURI });
+                                onTestVoice(
+                                  v.voiceURI,
+                                  localSettings.rate,
+                                  localSettings.pitch,
+                                  localSettings.volume
+                                );
+                              }}
+                              title="Preview this voice"
+                              className="p-1 hover:bg-amber-500/30 rounded text-amber-400 shrink-0 ml-2"
+                            >
+                              <Play className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Pitch & Volume Sliders */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-white/10">
                 {/* Pitch Slider */}
-                <div className="bg-[#16161A] p-3.5 rounded-2xl border border-white/10 space-y-2">
+                <div
+                  className={`bg-[#16161A] p-3.5 rounded-2xl border border-white/10 space-y-2 relative ${
+                    localSettings.ttsProvider === 'rvc-local' ? 'opacity-60' : ''
+                  }`}
+                >
                   <div className="flex justify-between items-center text-xs">
                     <span className="font-semibold text-white">Voice Pitch (Tone)</span>
-                    <span className="font-mono text-amber-400 font-bold">{localSettings.pitch}</span>
+                    <span className="font-mono text-amber-400 font-bold">
+                      {localSettings.ttsProvider === 'rvc-local' ? 'Cố định' : localSettings.pitch}
+                    </span>
                   </div>
                   <input
                     id="slider-tts-pitch"
@@ -459,17 +647,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     min={0.5}
                     max={2.0}
                     step={0.1}
+                    disabled={localSettings.ttsProvider === 'rvc-local'}
                     value={localSettings.pitch}
                     onChange={(e) =>
                       setLocalSettings({ ...localSettings, pitch: parseFloat(e.target.value) })
                     }
-                    className="w-full accent-amber-500 cursor-pointer h-1.5 bg-white/20 rounded-lg"
+                    className="w-full accent-amber-500 cursor-pointer h-1.5 bg-white/20 rounded-lg disabled:cursor-not-allowed"
                   />
                   <div className="flex justify-between text-[10px] text-slate-500 font-mono">
                     <span>0.5 Deep</span>
                     <span>1.0 Normal</span>
                     <span>2.0 High</span>
                   </div>
+                  {localSettings.ttsProvider === 'rvc-local' && (
+                    <div className="text-[10px] text-amber-400/80 font-sans">
+                      * Cao độ được cố định theo mô hình RVC đã train.
+                    </div>
+                  )}
                 </div>
 
                 {/* Volume Slider */}

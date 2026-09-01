@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+python-multipart
+TTS==0.22.0
+underthesea
+vinorm
+huggingface_hub
+torch
+torchaudio
+numpy

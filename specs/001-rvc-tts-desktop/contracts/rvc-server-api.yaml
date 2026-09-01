@@ -1,0 +1,110 @@
+openapi: 3.0.3
+info:
+  title: VoxRead Local RVC Voice Synthesis Server API
+  version: 1.0.0
+  description: API contract provided by python-backend/server.py for local voice synthesis.
+servers:
+  - url: http://127.0.0.1:8008
+    description: Default local development server
+
+paths:
+  /health:
+    get:
+      summary: Health check and model readiness probe
+      description: Returns server operational state and whether RVC weights are loaded in memory.
+      responses:
+        '200':
+          description: Server is online and responsive
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - ok
+                  - model_loaded
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  model_loaded:
+                    type: boolean
+                    example: true
+
+  /speak:
+    post:
+      summary: Synthesize text into cloned voice audio
+      description: Pipeline converts text to base speech via Edge-TTS and converts timbre via RVC model.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - text
+              properties:
+                text:
+                  type: string
+                  description: Text content of the sentence to synthesize
+                  example: "Xin chào! Tôi là giọng đọc của bạn trong VoxRead."
+                language:
+                  type: string
+                  description: Language code for base Edge-TTS synthesis
+                  default: "vi"
+                  example: "vi"
+      responses:
+        '200':
+          description: Raw synthesized audio in standard WAV format
+          headers:
+            Access-Control-Allow-Origin:
+              schema:
+                type: string
+                example: "*"
+            Content-Type:
+              schema:
+                type: string
+                example: audio/wav
+          content:
+            audio/wav:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: Missing or empty text in request body
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Thieu 'text' trong request"
+        '500':
+          description: Synthesis or neural inference error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "CUDA out of memory"
+
+    options:
+      summary: CORS preflight check
+      responses:
+        '204':
+          description: Preflight successful
+          headers:
+            Access-Control-Allow-Origin:
+              schema:
+                type: string
+                example: "*"
+            Access-Control-Allow-Methods:
+              schema:
+                type: string
+                example: "POST, OPTIONS"
+            Access-Control-Allow-Headers:
+              schema:
+                type: string
+                example: "Content-Type"
