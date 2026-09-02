@@ -3,18 +3,25 @@ import JSZip from 'jszip';
 import { parseNovelText } from './textParser';
 import { Chapter } from '../types';
 
-// Configure pdfjs worker if available or set fallback
-try {
-  // Use CDN worker or inline
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version || '3.11.174'}/pdf.worker.min.js`;
-} catch {
-  // Continue even if worker config fails
-}
+export const MAX_FILE_SIZE_MB = 100;
+export const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+
+// Configure pdfjs worker locally from bundled assets (offline-ready)
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.min.mjs',
+  import.meta.url
+).toString();
 
 /**
  * Extracts plain text from a TXT or Markdown file.
  */
-export async function parseTxtFile(file: File): Promise<{ title: string; chapters: Chapter[]; rawText: string }> {
+export async function parseTxtFile(
+  file: File,
+  signal?: AbortSignal
+): Promise<{ title: string; chapters: Chapter[]; rawText: string }> {
+  if (signal?.aborted) {
+    throw new DOMException('Parsing cancelled', 'AbortError');
+  }
   const text = await file.text();
   const title = file.name.replace(/\.[^/.]+$/, '');
   const chapters = parseNovelText(text, title);
@@ -22,12 +29,17 @@ export async function parseTxtFile(file: File): Promise<{ title: string; chapter
 }
 
 /**
- * Extracts text from a PDF file using pdfjs-dist.
+ * Extracts text from a PDF file using pdfjs-dist with abort support.
  */
 export async function parsePdfFile(
   file: File,
-  onProgress?: (percent: number) => void
+  onProgress?: (percent: number) => void,
+  signal?: AbortSignal
 ): Promise<{ title: string; chapters: Chapter[]; rawText: string }> {
+  if (signal?.aborted) {
+    throw new DOMException('Parsing cancelled', 'AbortError');
+  }
+
   const arrayBuffer = await file.arrayBuffer();
   const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) });
   const pdfDoc = await loadingTask.promise;
@@ -36,6 +48,9 @@ export async function parsePdfFile(
   const pageTexts: string[] = [];
 
   for (let i = 1; i <= numPages; i++) {
+    if (signal?.aborted) {
+      throw new DOMException('Parsing cancelled', 'AbortError');
+    }
     const page = await pdfDoc.getPage(i);
     const textContent = await page.getTextContent();
     
@@ -71,12 +86,17 @@ export async function parsePdfFile(
 }
 
 /**
- * Extracts chapters & text from an EPUB file using JSZip.
+ * Extracts chapters & text from an EPUB file using JSZip with abort support.
  */
 export async function parseEpubFile(
   file: File,
-  onProgress?: (percent: number) => void
+  onProgress?: (percent: number) => void,
+  signal?: AbortSignal
 ): Promise<{ title: string; author?: string; chapters: Chapter[]; rawText: string }> {
+  if (signal?.aborted) {
+    throw new DOMException('Parsing cancelled', 'AbortError');
+  }
+
   const arrayBuffer = await file.arrayBuffer();
   const zip = await JSZip.loadAsync(arrayBuffer);
 
@@ -127,6 +147,9 @@ export async function parseEpubFile(
   const fullTextParts: string[] = [];
 
   for (let i = 0; i < spineItemRefs.length; i++) {
+    if (signal?.aborted) {
+      throw new DOMException('Parsing cancelled', 'AbortError');
+    }
     const idref = spineItemRefs[i];
     const relHref = manifestItems[idref];
     if (!relHref) continue;

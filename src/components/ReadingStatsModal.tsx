@@ -67,21 +67,28 @@ export const ReadingStatsModal: React.FC<ReadingStatsModalProps> = ({
     stats.totalReadingTimeMinutes / Math.max(1, stats.totalSessions)
   );
 
+  const hasReadingData =
+    stats.totalReadingTimeMinutes > 0 ||
+    stats.totalWordsRead > 0 ||
+    (stats.recentSessions && stats.recentSessions.length > 0);
+
   // Mascot personalized coaching feedback
-  const mascotComment = {
-    fox: `🦊 Kitsune: "Outstanding pace! You've logged ${formatTime(
-      stats.totalReadingTimeMinutes
-    )} with an impressive ${stats.overallAvgWpm} WPM average. Keep up the daily reading momentum!"`,
-    owl: `🦉 Barnaby: "Scholarly dedication! Your ${stats.currentStreakDays}-day streak and focus on literary immersion demonstrates admirable consistency."`,
-    bot: `🤖 Voxie-9: "Telemetry analyzed: Speech processing engine operating at peak efficiency (${stats.overallAvgWpm} WPM across ${stats.totalWordsRead.toLocaleString()} words)."`,
-    cat: `🐱 Mochi: "Purr-fect cozy reading time! ${formatTime(
-      stats.todayDurationMinutes
-    )} enjoyed today with delightful stories."`,
-    bunny: `🐰 Luna: "Gentle progress illuminated by the moon! You've completed ${formatTime(
-      stats.totalReadingTimeMinutes
-    )} of wonderful tales."`,
-    dragon: `🐲 Astral Dragon: "Fiery reading passion! ${stats.totalWordsRead.toLocaleString()} words conquered with boundless mythical energy!"`,
-  }[mascotType];
+  const mascotComment = !hasReadingData
+    ? `✨ Chào mừng bạn! Bắt đầu đọc hoặc nghe sách để theo dõi tiến trình và số liệu tại đây.`
+    : {
+        fox: `🦊 Kitsune: "Outstanding pace! You've logged ${formatTime(
+          stats.totalReadingTimeMinutes
+        )} with an impressive ${stats.overallAvgWpm} WPM average. Keep up the daily reading momentum!"`,
+        owl: `🦉 Barnaby: "Scholarly dedication! Your ${stats.currentStreakDays}-day streak and focus on literary immersion demonstrates admirable consistency."`,
+        bot: `🤖 Voxie-9: "Telemetry analyzed: Speech processing engine operating at peak efficiency (${stats.overallAvgWpm} WPM across ${stats.totalWordsRead.toLocaleString()} words)."`,
+        cat: `🐱 Mochi: "Purr-fect cozy reading time! ${formatTime(
+          stats.todayDurationMinutes
+        )} enjoyed today with delightful stories."`,
+        bunny: `🐰 Luna: "Gentle progress illuminated by the moon! You've completed ${formatTime(
+          stats.totalReadingTimeMinutes
+        )} of wonderful tales."`,
+        dragon: `🐲 Astral Dragon: "Fiery reading passion! ${stats.totalWordsRead.toLocaleString()} words conquered with boundless mythical energy!"`,
+      }[mascotType];
 
   // Custom Chart Tooltip
   const CustomTooltip = ({ active, payload, label }: any) => {
@@ -159,6 +166,23 @@ export const ReadingStatsModal: React.FC<ReadingStatsModalProps> = ({
 
         {/* Modal Scrollable Body */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          {/* Zero-State Encouraging Banner */}
+          {!hasReadingData && (
+            <div className="p-6 rounded-2xl bg-[#16161A] border border-amber-500/20 flex flex-col items-center justify-center text-center space-y-3 animate-fade-in">
+              <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                <BookOpen className="w-6 h-6" />
+              </div>
+              <div className="space-y-1">
+                <h4 className="text-sm font-bold text-white tracking-wide">
+                  Chưa có dữ liệu đọc sách
+                </h4>
+                <p className="text-xs text-slate-400 max-w-sm leading-relaxed">
+                  Bắt đầu đọc hoặc nghe sách bằng giọng đọc để theo dõi thời gian, tốc độ và số từ đã đọc mỗi ngày tại đây.
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Top 3 Core Metrics Summary Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
             {/* 1. Total Reading Time */}

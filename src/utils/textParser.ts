@@ -10,14 +10,18 @@ export function splitIntoSentences(text: string): string[] {
 
   // Protect common abbreviations by replacing period with a placeholder
   const protectedText = text
-    .replace(/(?<=\b(?:Mr|Mrs|Ms|Dr|Prof|Sr|Jr|vs|etc|e\.g|i\.e|No|Vol|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec|St|Ave))\./gi, '§DOT§')
-    .replace(/(?<=\b[A-Z])\./g, '§DOT§') // Single initials like "J. K. Rowling"
+    // English & Vietnamese titles, administrative terms, and common abbreviations
+    .replace(
+      /(?<=\b(?:Mr|Mrs|Ms|Dr|Prof|Sr|Jr|vs|etc|e\.g|i\.e|No|Vol|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec|St|Ave|TP|TX|TT|Q|P|H|X|GS|PGS|TS|ThS|BS|DS|CN|KTS|LS|KS|NXB|HĐND|UBND|THPT|THCS|TH|ĐH|CĐ|TC|Th\.S|P\.GS|T\.S|v\.v|v\.\.v|đ\/c|Đ\/c))\./gi,
+      '§DOT§'
+    )
+    .replace(/(?<=\b[A-Z])\./g, '§DOT§') // Single initials like "J. K. Rowling" or "Nguyễn V. A"
     .replace(/(\d+)\.(\d+)/g, '$1§DEC§$2'); // Decimals like 3.14
 
   // Match sentences ending with ., !, ?, or Japanese punctuation 。, ！, ？
   // followed by space, quote, or end of text
   const rawSentences: string[] = [];
-  const regex = /([^.!?。！？\n]+[.!?。！？]+["'”’»]?|[^.!?。！？\n]+$)/g;
+  const regex = /([^.!?。！？\n]+[.!?。！？]+["'”’»\)\]]*|[^.!?。！？\n]+$)/g;
   
   let match: RegExpExecArray | null;
   while ((match = regex.exec(protectedText)) !== null) {

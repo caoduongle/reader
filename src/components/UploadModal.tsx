@@ -11,7 +11,13 @@ import {
   FileCode,
 } from 'lucide-react';
 import { DocumentItem } from '../types';
-import { parseTxtFile, parsePdfFile, parseEpubFile } from '../utils/fileParser';
+import {
+  parseTxtFile,
+  parsePdfFile,
+  parseEpubFile,
+  MAX_FILE_SIZE_MB,
+  MAX_FILE_SIZE_BYTES,
+} from '../utils/fileParser';
 import { parseNovelText } from '../utils/textParser';
 import { SAMPLE_DOCUMENTS } from '../utils/sampleNovels';
 
@@ -38,11 +44,21 @@ export const UploadModal: React.FC<UploadModalProps> = ({
   const [pastedContent, setPastedContent] = useState('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const handleProcessFile = async (file: File) => {
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      setErrorMessage(`Tệp vượt quá dung lượng tối đa cho phép (${MAX_FILE_SIZE_MB}MB).`);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
     setIsLoading(true);
     setErrorMessage(null);
     setProgress(10);
+
+    abortControllerRef.current = new AbortController();
+    const signal = abortControllerRef.current.signal;
 
     const ext = file.name.split('.').pop()?.toLowerCase() || '';
 
@@ -54,25 +70,34 @@ export const UploadModal: React.FC<UploadModalProps> = ({
 
       if (ext === 'pdf') {
         format = 'pdf';
-        const res = await parsePdfFile(file, (p) => setProgress(p));
+        const res = await parsePdfFile(file, (p) => setProgress(p), signal);
         chapters = res.chapters;
         docTitle = res.title;
       } else if (ext === 'epub') {
         format = 'epub';
-        const res = await parseEpubFile(file, (p) => setProgress(p));
+        const res = await parseEpubFile(file, (p) => setProgress(p), signal);
         chapters = res.chapters;
         docTitle = res.title;
         docAuthor = res.author;
       } else {
         // txt, md, etc.
         format = 'txt';
-        const res = await parseTxtFile(file);
+        const res = await parseTxtFile(file, signal);
         chapters = res.chapters;
         docTitle = res.title;
       }
 
       const totalWords = chapters.reduce((acc, c) => acc + c.wordCount, 0);
       const totalSentences = chapters.reduce((acc, c) => acc + c.totalSentences, 0);
+
+      if (totalSentences === 0 || totalWords === 0) {
+        setErrorMessage('Tệp không có nội dung văn bản hợp lệ.');
+        setIsLoading(false);
+        setProgress(0);
+        abortControllerRef.current = null;
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        return;
+      }
 
       const newDoc: DocumentItem = {
         id: `doc-${Date.now()}`,
@@ -94,6 +119,11 @@ export const UploadModal: React.FC<UploadModalProps> = ({
       onDocumentLoaded(newDoc);
       onClose();
     } catch (err: unknown) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        console.log('[UploadModal] File parsing aborted by user.');
+        setErrorMessage('Đã huỷ xử lý tệp.');
+        return;
+      }
       console.error('File parsing error:', err);
       setErrorMessage(
         err instanceof Error
@@ -103,6 +133,8 @@ export const UploadModal: React.FC<UploadModalProps> = ({
     } finally {
       setIsLoading(false);
       setProgress(0);
+      abortControllerRef.current = null;
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -254,7 +286,10 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                 />
 
                 {isLoading ? (
-                  <div className="flex flex-col items-center space-y-3 py-4">
+                  <div
+                    className="flex flex-col items-center space-y-3 py-4"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     <Loader2 className="w-10 h-10 text-amber-500 animate-spin" />
                     <div className="text-sm font-semibold text-neutral-200">
                       Processing Document ({progress}%)...
@@ -265,6 +300,19 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                         style={{ width: `${progress}%` }}
                       />
                     </div>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        abortControllerRef.current?.abort();
+                        setIsLoading(false);
+                        setProgress(0);
+                      }}
+                      className="mt-2 px-4 py-1.5 rounded-xl bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 text-red-300 text-xs font-semibold flex items-center space-x-1.5 transition-colors cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                      <span>Huỷ xử lý</span>
+                    </button>
                   </div>
                 ) : (
                   <>
@@ -279,7 +327,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                         Supports <span className="text-amber-400 font-mono">.txt</span>,{' '}
                         <span className="text-amber-400 font-mono">.pdf</span>,{' '}
                         <span className="text-amber-400 font-mono">.epub</span>,{' '}
-                        <span className="text-amber-400 font-mono">.md</span>
+                        <span className="text-amber-400 font-mono">.md</span> (Tối đa {MAX_FILE_SIZE_MB}MB)
                       </p>
                     </div>
                     <div className="inline-block px-3 py-1.5 rounded-lg bg-neutral-800 border border-neutral-700 text-xs text-neutral-300 font-medium">

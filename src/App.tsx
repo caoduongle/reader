@@ -13,36 +13,27 @@ import { TOCDrawer } from './components/TOCDrawer';
 import { SearchDrawer } from './components/SearchDrawer';
 import { BookmarksDrawer } from './components/BookmarksDrawer';
 import { ReadingStatsModal } from './components/ReadingStatsModal';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { useReadingStats } from './hooks/useReadingStats';
 import { THEMES } from './utils/themeStyles';
-
-const RECENT_DOC_STORAGE_KEY = 'voxread_active_document_v1';
+import {
+  saveReadingPosition,
+  getReadingPosition,
+  clearReadingPosition,
+  LEGACY_ACTIVE_DOC_KEY,
+} from './utils/storage';
+import {
+  saveDocument,
+  getDocument,
+  getActiveDocument,
+  setActiveDocumentId,
+} from './utils/indexedDB';
 
 export default function App() {
-  // Load saved document or default to Sherlock Holmes
-  const [currentDocument, setCurrentDocument] = useState<DocumentItem>(() => {
-    try {
-      const saved = localStorage.getItem(RECENT_DOC_STORAGE_KEY);
-      if (saved) {
-        return JSON.parse(saved);
-      }
-    } catch {
-      // fallback
-    }
-    return SAMPLE_DOCUMENTS[0];
-  });
-
-  const [currentChapterIndex, setCurrentChapterIndex] = useState<number>(() => {
-    return currentDocument?.lastRead?.chapterIndex || 0;
-  });
-
-  // Modals state
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isUploadOpen, setIsUploadOpen] = useState(false);
-  const [isTOCOpen, setIsTOCOpen] = useState(false);
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [isBookmarksOpen, setIsBookmarksOpen] = useState(false);
-  const [isStatsOpen, setIsStatsOpen] = useState(false);
+  // Initialize with sample document as default fallback
+  const [currentDocument, setCurrentDocument] = useState<DocumentItem>(SAMPLE_DOCUMENTS[0]);
+  const [currentChapterIndex, setCurrentChapterIndex] = useState<number>(0);
+  const [pendingJumpSentence, setPendingJumpSentence] = useState<number | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const showToast = useCallback((msg: string) => {
@@ -51,6 +42,80 @@ export default function App() {
       setToastMessage((prev) => (prev === msg ? null : prev));
     }, 2400);
   }, []);
+
+  // Restore persisted document and reading position on mount
+  useEffect(() => {
+    let isMounted = true;
+    async function restoreSession() {
+      try {
+        const savedPos = getReadingPosition();
+        let loadedDoc: DocumentItem | null = null;
+
+        if (savedPos?.documentId) {
+          loadedDoc = await getDocument(savedPos.documentId);
+        }
+
+        if (!loadedDoc) {
+          loadedDoc = await getActiveDocument();
+        }
+
+        // Fallback: check legacy localStorage for seamless upgrade
+        if (!loadedDoc) {
+          const legacyRaw = localStorage.getItem(LEGACY_ACTIVE_DOC_KEY);
+          if (legacyRaw) {
+            try {
+              const legacyDoc = JSON.parse(legacyRaw);
+              if (legacyDoc && legacyDoc.id && legacyDoc.chapters) {
+                loadedDoc = legacyDoc;
+                await saveDocument(legacyDoc);
+              }
+            } catch {
+              // ignore
+            }
+          }
+        }
+
+        if (isMounted && loadedDoc) {
+          setCurrentDocument(loadedDoc);
+          if (savedPos && savedPos.documentId === loadedDoc.id) {
+            const safeChap = Math.max(
+              0,
+              Math.min(loadedDoc.chapters.length - 1, savedPos.chapterIndex)
+            );
+            setCurrentChapterIndex(safeChap);
+            if (savedPos.sentenceIndex > 0) {
+              setPendingJumpSentence(savedPos.sentenceIndex);
+            }
+          } else if (loadedDoc.lastRead) {
+            setCurrentChapterIndex(loadedDoc.lastRead.chapterIndex || 0);
+            if (loadedDoc.lastRead.sentenceIndex > 0) {
+              setPendingJumpSentence(loadedDoc.lastRead.sentenceIndex);
+            }
+          }
+        } else if (isMounted && savedPos) {
+          showToast('Không thể khôi phục phiên đọc trước đó, đang mở tài liệu mẫu');
+        }
+      } catch (error) {
+        console.warn('[VoxRead] Failed to restore session:', error);
+        if (isMounted) {
+          showToast('Không thể khôi phục phiên đọc trước đó, đang mở tài liệu mẫu');
+        }
+      }
+    }
+
+    restoreSession();
+    return () => {
+      isMounted = false;
+    };
+  }, [showToast]);
+
+  // Modals state
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isUploadOpen, setIsUploadOpen] = useState(false);
+  const [isTOCOpen, setIsTOCOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isBookmarksOpen, setIsBookmarksOpen] = useState(false);
+  const [isStatsOpen, setIsStatsOpen] = useState(false);
 
   // Bookmarks management
   const {
@@ -125,9 +190,9 @@ export default function App() {
     currentSentences,
     (sentenceIdx) => {
       if (currentDocument) {
-        const updated = {
-          ...currentDocument,
-          lastRead: {
+        saveReadingPosition(
+          {
+            documentId: currentDocument.id,
             chapterIndex: currentChapterIndex,
             sentenceIndex: sentenceIdx,
             progressPercentage: Math.round(
@@ -135,12 +200,8 @@ export default function App() {
             ),
             updatedAt: Date.now(),
           },
-        };
-        try {
-          localStorage.setItem(RECENT_DOC_STORAGE_KEY, JSON.stringify(updated));
-        } catch {
-          // ignore
-        }
+          () => showToast('Không lưu được tiến trình đọc — thiết bị đầy bộ nhớ trình duyệt')
+        );
       }
     },
     handleChapterComplete
@@ -151,11 +212,17 @@ export default function App() {
     stop();
     setCurrentDocument(newDoc);
     setCurrentChapterIndex(0);
-    try {
-      localStorage.setItem(RECENT_DOC_STORAGE_KEY, JSON.stringify(newDoc));
-    } catch {
-      // ignore
-    }
+    saveDocument(newDoc).catch(() =>
+      showToast('Không lưu được tài liệu vào bộ nhớ dài hạn — phiên đọc chỉ tồn tại trong tab hiện tại')
+    );
+    setActiveDocumentId(newDoc.id);
+    saveReadingPosition({
+      documentId: newDoc.id,
+      chapterIndex: 0,
+      sentenceIndex: 0,
+      progressPercentage: 0,
+      updatedAt: Date.now(),
+    });
   };
 
   // Switch chapter
@@ -177,13 +244,20 @@ export default function App() {
     }
   };
 
+  // Reactive sentence jumping (for cross-chapter search jumps and session restoration)
+  useEffect(() => {
+    if (pendingJumpSentence !== null && currentSentences.length > 0) {
+      const target = Math.min(pendingJumpSentence, currentSentences.length - 1);
+      jumpToSentence(target, false);
+      setPendingJumpSentence(null);
+    }
+  }, [currentChapterIndex, currentSentences, pendingJumpSentence, jumpToSentence]);
+
   // Jump from search
   const handleJumpToSearchMatch = (chapterIdx: number, sentenceIdx: number) => {
     if (chapterIdx !== currentChapterIndex) {
       setCurrentChapterIndex(chapterIdx);
-      setTimeout(() => {
-        jumpToSentence(sentenceIdx, true);
-      }, 100);
+      setPendingJumpSentence(sentenceIdx);
     } else {
       jumpToSentence(sentenceIdx, true);
     }
@@ -350,20 +424,32 @@ export default function App() {
 
       {/* Main Distraction-free Reading Canvas */}
       <main className="flex-1 flex flex-col relative overflow-hidden">
-        <ReaderContent
-          currentChapter={currentChapter}
-          chapterIndex={currentChapterIndex}
-          totalChapters={currentDocument?.chapters?.length || 1}
-          currentSentenceIndex={currentSentenceIndex}
-          isPlaying={isPlaying}
-          isPaused={isPaused}
-          settings={settings}
-          bookmarkedSentenceIndices={bookmarkedSentenceIndices}
-          onSentenceClick={handleSentenceClick}
-          onPrevChapter={handlePrevChapter}
-          onNextChapter={handleNextChapter}
-          onOpenUpload={() => setIsUploadOpen(true)}
-        />
+        <ErrorBoundary
+          isContentOnly
+          fallbackTitle="Lỗi hiển thị nội dung"
+          fallbackDescription="Nội dung tài liệu gặp sự cố khi hiển thị. Bạn có thể thử tải lại hoặc quay về tài liệu mẫu."
+          onResetToSample={() => {
+            clearReadingPosition();
+            setCurrentDocument(SAMPLE_DOCUMENTS[0]);
+            setCurrentChapterIndex(0);
+            showToast('Đã quay về tài liệu mẫu');
+          }}
+        >
+          <ReaderContent
+            currentChapter={currentChapter}
+            chapterIndex={currentChapterIndex}
+            totalChapters={currentDocument?.chapters?.length || 1}
+            currentSentenceIndex={currentSentenceIndex}
+            isPlaying={isPlaying}
+            isPaused={isPaused}
+            settings={settings}
+            bookmarkedSentenceIndices={bookmarkedSentenceIndices}
+            onSentenceClick={handleSentenceClick}
+            onPrevChapter={handlePrevChapter}
+            onNextChapter={handleNextChapter}
+            onOpenUpload={() => setIsUploadOpen(true)}
+          />
+        </ErrorBoundary>
       </main>
 
       {/* Floating Audio Control Bar */}

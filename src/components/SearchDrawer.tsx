@@ -91,7 +91,7 @@ export const SearchDrawer: React.FC<SearchDrawerProps> = ({
         <div className="flex-1 overflow-y-auto p-3 space-y-2">
           {matches.map((m, idx) => (
             <div
-              key={idx}
+              key={`${m.chapterIndex}-${m.sentenceIndex}-${idx}`}
               onClick={() => {
                 onJumpToMatch(m.chapterIndex, m.sentenceIndex);
                 onClose();

@@ -33,25 +33,6 @@ function getLast7DaysMetadata(): { date: string; dayLabel: string; fullDateLabel
   return result;
 }
 
-// Generate initial baseline realistic history for past 6 days so user sees insightful graphs immediately
-function generateSeedStats(): Record<string, { durationMinutes: number; wordsRead: number; sessionsCount: number }> {
-  const days = getLast7DaysMetadata();
-  const initialMap: Record<string, { durationMinutes: number; wordsRead: number; sessionsCount: number }> = {};
-
-  const sampleMinutes = [22, 38, 18, 45, 30, 25, 12];
-  const sampleWords = [4850, 8400, 3950, 10200, 6700, 5600, 2600];
-
-  days.forEach((day, index) => {
-    initialMap[day.date] = {
-      durationMinutes: sampleMinutes[index % sampleMinutes.length],
-      wordsRead: sampleWords[index % sampleWords.length],
-      sessionsCount: Math.max(1, Math.round(sampleMinutes[index % sampleMinutes.length] / 15)),
-    };
-  });
-
-  return initialMap;
-}
-
 export function useReadingStats(
   isPlaying: boolean,
   isPaused: boolean,
@@ -72,7 +53,7 @@ export function useReadingStats(
     } catch {
       // ignore
     }
-    return generateSeedStats();
+    return {};
   });
 
   // Recent individual session logs
@@ -85,26 +66,7 @@ export function useReadingStats(
     } catch {
       // ignore
     }
-    return [
-      {
-        id: 'seed-1',
-        timestamp: Date.now() - 3600 * 1000 * 24 * 2,
-        documentTitle: 'A Study in Scarlet',
-        chapterTitle: 'Chapter 1: Mr. Sherlock Holmes',
-        durationSeconds: 1320,
-        wordsRead: 4950,
-        wpm: 225,
-      },
-      {
-        id: 'seed-2',
-        timestamp: Date.now() - 3600 * 1000 * 24,
-        documentTitle: 'The Picture of Dorian Gray',
-        chapterTitle: 'Chapter 1: The Studio',
-        durationSeconds: 1800,
-        wordsRead: 6750,
-        wpm: 225,
-      },
-    ];
+    return [];
   });
 
   // Live active session tracking
@@ -260,8 +222,10 @@ export function useReadingStats(
     // Longest session calculation
     const longestSession = recentSessions.reduce(
       (max, s) => Math.max(max, Math.round(s.durationSeconds / 60)),
-      todayEntry.durationMinutes > 0 ? Math.round(todayEntry.durationMinutes) : 45
+      Math.round(todayEntry.durationMinutes || 0)
     );
+
+    const activeSessionsCount = recentSessions.length + (todayEntry.sessionsCount > 0 ? todayEntry.sessionsCount : 0);
 
     return {
       totalReadingTimeMinutes: totalTimeMin,
@@ -269,20 +233,19 @@ export function useReadingStats(
       overallAvgWpm,
       todayDurationMinutes: Math.round(todayEntry.durationMinutes),
       todayWordsRead: todayEntry.wordsRead,
-      currentStreakDays: Math.max(1, streak),
-      longestSessionMinutes: Math.max(25, longestSession),
-      totalSessions: recentSessions.length + 8,
+      currentStreakDays: streak,
+      longestSessionMinutes: longestSession,
+      totalSessions: activeSessionsCount,
       dailyStats,
       recentSessions,
     };
   }, [dailyDataMap, recentSessions])();
 
   const resetStats = useCallback(() => {
-    const freshSeed = generateSeedStats();
-    setDailyDataMap(freshSeed);
+    setDailyDataMap({});
     setRecentSessions([]);
     try {
-      localStorage.setItem(STATS_STORAGE_KEY, JSON.stringify(freshSeed));
+      localStorage.removeItem(STATS_STORAGE_KEY);
       localStorage.removeItem(SESSIONS_STORAGE_KEY);
     } catch {
       // ignore
