@@ -91,6 +91,31 @@ Sau khi chạy script thiết lập xong, bạn có thể khởi động ngay:
 
 ---
 
+### 🧪 Chạy Kiểm Thử Tự Động (Testing)
+
+Dự án trang bị hệ thống kiểm thử tự động hai đầu:
+
+1. **Frontend Tests (Vitest & React Testing Library)**:
+   ```bash
+   # Chạy toàn bộ unit & component tests một lần
+   npm test
+
+   # Chạy ở chế độ theo dõi (watch mode)
+   npm run test:watch
+   ```
+
+2. **Backend Tests (Pytest)**:
+   - **Windows**:
+     ```powershell
+     python-backend\venv\Scripts\python.exe -m pytest python-backend\tests
+     ```
+   - **macOS / Linux**:
+     ```bash
+     python-backend/venv/bin/pytest python-backend/tests
+     ```
+
+---
+
 ### 🎙️ Cấu hình giọng đọc cá nhân RVC (Tùy chọn)
 
 Dành cho người muốn đọc sách bằng chính giọng AI của bản thân:
