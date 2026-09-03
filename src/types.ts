@@ -84,7 +84,7 @@ export interface DocumentItem {
   id: string;
   title: string;
   author?: string;
-  format: 'txt' | 'pdf' | 'epub' | 'pasted' | 'sample';
+  format: 'txt' | 'pdf' | 'epub' | 'pasted' | 'sample' | 'url';
   chapters: Chapter[];
   createdAt: number;
   lastRead: {
@@ -138,3 +138,19 @@ export interface ReadingStatsSummary {
   dailyStats: DailyReadingStat[]; // last 7 days (chronological order)
   recentSessions: ReadingSessionRecord[];
 }
+
+export interface FetchUrlSuccessResponse {
+  ok: true;
+  title: string;
+  content: string;
+  byline?: string;
+  siteName?: string;
+}
+
+export interface FetchUrlErrorResponse {
+  ok: false;
+  error: string;
+}
+
+export type FetchUrlResponse = FetchUrlSuccessResponse | FetchUrlErrorResponse;
+

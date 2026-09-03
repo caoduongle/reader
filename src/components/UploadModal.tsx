@@ -9,6 +9,7 @@ import {
   Loader2,
   AlertCircle,
   FileCode,
+  Globe,
 } from 'lucide-react';
 import { DocumentItem } from '../types';
 import {
@@ -28,7 +29,7 @@ interface UploadModalProps {
 }
 
 export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onDocumentLoaded }) => {
-  const [activeTab, setActiveTab] = useState<'upload' | 'paste' | 'samples'>('upload');
+  const [activeTab, setActiveTab] = useState<'upload' | 'paste' | 'samples' | 'url'>('upload');
   const [isDragging, setIsDragging] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -38,6 +39,10 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onDoc
   const [pastedTitle, setPastedTitle] = useState('');
   const [pastedAuthor, setPastedAuthor] = useState('');
   const [pastedContent, setPastedContent] = useState('');
+
+  // URL form state
+  const [urlInput, setUrlInput] = useState('');
+  const [isFetchingUrl, setIsFetchingUrl] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -174,6 +179,80 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onDoc
     onClose();
   };
 
+  const handleUrlSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const cleanUrl = urlInput.trim();
+    if (!cleanUrl) {
+      setErrorMessage('Vui lòng nhập địa chỉ liên kết (URL).');
+      return;
+    }
+
+    setIsFetchingUrl(true);
+    setErrorMessage(null);
+
+    try {
+      const proxyBase = 'http://127.0.0.1:3001';
+      const res = await fetch(`${proxyBase}/api/fetch-url`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ url: cleanUrl }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setErrorMessage(
+          data?.error || `Không thể tải nội dung liên kết (mã lỗi HTTP ${res.status}).`
+        );
+        setIsFetchingUrl(false);
+        return;
+      }
+
+      const title = (data.title || 'Bài viết từ liên kết').trim();
+      const content = (data.content || '').trim();
+      const chapters = parseNovelText(content, title);
+      const totalWords = chapters.reduce((acc, c) => acc + c.wordCount, 0);
+      const totalSentences = chapters.reduce((acc, c) => acc + c.totalSentences, 0);
+
+      if (totalSentences === 0 || totalWords === 0) {
+        setErrorMessage('Không trích xuất được văn bản hợp lệ từ liên kết này.');
+        setIsFetchingUrl(false);
+        return;
+      }
+
+      const newDoc: DocumentItem = {
+        id: `doc-${Date.now()}`,
+        title,
+        author: data.byline || data.siteName || undefined,
+        format: 'url',
+        chapters,
+        createdAt: Date.now(),
+        lastRead: {
+          chapterIndex: 0,
+          sentenceIndex: 0,
+          progressPercentage: 0,
+          updatedAt: Date.now(),
+        },
+        totalWords,
+        totalSentences,
+      };
+
+      onDocumentLoaded(newDoc);
+      setUrlInput('');
+      onClose();
+    } catch (err: unknown) {
+      console.error('[UploadModal] Fetch URL error:', err);
+      setErrorMessage(
+        err instanceof Error
+          ? err.message
+          : 'Không thể kết nối đến server proxy để lấy nội dung liên kết.'
+      );
+    } finally {
+      setIsFetchingUrl(false);
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -242,6 +321,19 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onDoc
           >
             <Sparkles className="w-4 h-4" />
             <span>Classic Library</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('url')}
+            id="tab-url-btn"
+            className={`px-4 py-2.5 rounded-t-xl text-sm font-medium flex items-center space-x-2 transition-colors border-b-2 ${
+              activeTab === 'url'
+                ? 'border-amber-500 text-amber-400 bg-neutral-800/60'
+                : 'border-transparent text-neutral-400 hover:text-neutral-200'
+            }`}
+          >
+            <Globe className="w-4 h-4" />
+            <span>Đọc từ liên kết</span>
           </button>
         </div>
 
@@ -461,6 +553,68 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onDoc
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* TAB 4: URL IMPORT */}
+          {activeTab === 'url' && (
+            <div className="space-y-4">
+              <div className="text-xs text-neutral-400">
+                Nhập địa chỉ URL của bài báo, chương truyện hoặc bài viết trên web để VoxRead tự
+                động trích xuất nội dung và sẵn sàng đọc bằng giọng TTS.
+              </div>
+
+              <form onSubmit={handleUrlSubmit} className="space-y-4">
+                <div>
+                  <label
+                    htmlFor="url-input"
+                    className="block text-xs font-semibold text-neutral-300 mb-1.5"
+                  >
+                    Đường dẫn bài viết (URL)
+                  </label>
+                  <div className="relative">
+                    <input
+                      id="url-input"
+                      type="url"
+                      value={urlInput}
+                      onChange={e => setUrlInput(e.target.value)}
+                      placeholder="https://vnexpress.net/... hoặc https://truyenfull.io/..."
+                      disabled={isFetchingUrl}
+                      className="w-full px-4 py-3 pl-10 rounded-xl bg-neutral-950 border border-neutral-800 text-neutral-100 text-sm focus:outline-none focus:border-amber-500 transition-colors font-mono disabled:opacity-50"
+                    />
+                    <Globe className="w-4 h-4 text-neutral-500 absolute left-3.5 top-3.5" />
+                  </div>
+                </div>
+
+                <div className="flex justify-end space-x-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    disabled={isFetchingUrl}
+                    className="px-4 py-2 rounded-xl text-xs font-semibold text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors disabled:opacity-50 cursor-pointer"
+                  >
+                    Huỷ
+                  </button>
+                  <button
+                    type="submit"
+                    id="submit-url-btn"
+                    disabled={!urlInput.trim() || isFetchingUrl}
+                    className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold text-xs flex items-center space-x-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-amber-500/20 cursor-pointer"
+                  >
+                    {isFetchingUrl ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Đang lấy nội dung...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4" />
+                        <span>Lấy nội dung</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
             </div>
           )}
         </div>
