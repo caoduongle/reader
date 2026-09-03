@@ -72,7 +72,6 @@ export function useReadingStats(
   // Live active session tracking
   const [sessionSeconds, setSessionSeconds] = useState<number>(0);
   const [sessionWordsRead, setSessionWordsRead] = useState<number>(0);
-  const sessionStartTimeRef = useRef<number>(Date.now());
   const wordsAccumulatorRef = useRef<number>(0);
 
   // Track words as sentences advance
@@ -188,8 +187,6 @@ export function useReadingStats(
     const daysMeta = getLast7DaysMetadata();
     let totalTimeMin = 0;
     let totalWords = 0;
-    let totalWeightedWpm = 0;
-    let daysWithReading = 0;
 
     const dailyStats: DailyReadingStat[] = daysMeta.map(meta => {
       const entry = dailyDataMap[meta.date] || {
@@ -203,10 +200,6 @@ export function useReadingStats(
 
       totalTimeMin += duration;
       totalWords += words;
-      if (duration > 0) {
-        totalWeightedWpm += wpm * duration;
-        daysWithReading++;
-      }
 
       return {
         date: meta.date,

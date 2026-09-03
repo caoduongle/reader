@@ -6,7 +6,7 @@ export const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 
 // Lazy module singletons
 let pdfjsPromise: Promise<typeof import('pdfjs-dist')> | null = null;
-let jszipPromise: Promise<any> | null = null;
+let jszipPromise: Promise<typeof import('jszip')> | null = null;
 
 async function getPdfJs(): Promise<typeof import('pdfjs-dist')> {
   if (!pdfjsPromise) {
@@ -23,9 +23,9 @@ async function getPdfJs(): Promise<typeof import('pdfjs-dist')> {
   return pdfjsPromise;
 }
 
-async function getJsZip(): Promise<any> {
+async function getJsZip(): Promise<typeof import('jszip')> {
   if (!jszipPromise) {
-    jszipPromise = import('jszip').then(mod => mod.default || mod);
+    jszipPromise = import('jszip').then(mod => (mod.default || mod) as unknown as typeof import('jszip'));
   }
   return jszipPromise;
 }

@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { X, Search, ChevronRight, CornerDownLeft } from 'lucide-react';
+import { X, Search, CornerDownLeft } from 'lucide-react';
 import { DocumentItem, SearchMatch } from '../types';
 
 interface SearchDrawerProps {

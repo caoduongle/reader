@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { DocumentItem, SentenceItem, TTSSettings, MascotType, BookmarkItem } from './types';
+import { DocumentItem, SentenceItem, TTSSettings, MascotType } from './types';
 import { SAMPLE_DOCUMENTS } from './utils/sampleNovels';
 import { useTTS } from './hooks/useTTS';
 import { useBookmarks } from './hooks/useBookmarks';
@@ -175,9 +175,6 @@ export default function App() {
     isPlaying,
     isPaused,
     currentSentenceIndex,
-    play,
-    pause,
-    resume,
     togglePlay,
     stop,
     nextSentence,

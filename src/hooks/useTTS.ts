@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { TTSVoiceOption, TTSSettings, SentenceItem, TTSProvider, RVCServerStatus } from '../types';
+import { TTSVoiceOption, TTSSettings, SentenceItem, RVCServerStatus } from '../types';
 
 export const DEFAULT_SETTINGS: TTSSettings = {
   ttsProvider: 'browser',
@@ -168,9 +168,9 @@ export function useTTS(
       }
       setRvcServerStatus('unreachable');
       return false;
-    } catch (err: any) {
+    } catch (err: unknown) {
       setRvcServerStatus('unreachable');
-      setServerErrorMessage(err?.message || 'Không thể kết nối');
+      setServerErrorMessage(err instanceof Error ? err.message : 'Không thể kết nối');
       return false;
     }
   }, []);
@@ -268,7 +268,14 @@ export function useTTS(
   }, [loadVoices]);
 
   // KeepAlive timer for Chromium speech synthesis
-  const startKeepAlive = () => {
+  const stopKeepAlive = useCallback(() => {
+    if (keepAliveIntervalRef.current !== null) {
+      clearInterval(keepAliveIntervalRef.current);
+      keepAliveIntervalRef.current = null;
+    }
+  }, []);
+
+  const startKeepAlive = useCallback(() => {
     stopKeepAlive();
     keepAliveIntervalRef.current = window.setInterval(() => {
       if (window.speechSynthesis && isPlayingRef.current && !isPausedRef.current) {
@@ -276,14 +283,7 @@ export function useTTS(
         window.speechSynthesis.resume();
       }
     }, 10000);
-  };
-
-  const stopKeepAlive = () => {
-    if (keepAliveIntervalRef.current !== null) {
-      clearInterval(keepAliveIntervalRef.current);
-      keepAliveIntervalRef.current = null;
-    }
-  };
+  }, [stopKeepAlive]);
 
   // Helper to fetch RVC speech audio blob from server
   const fetchRVCSpeech = useCallback(
@@ -310,8 +310,8 @@ export function useTTS(
           throw new Error('Received empty audio blob');
         }
         return URL.createObjectURL(blob);
-      } catch (err: any) {
-        if (err?.name === 'AbortError') {
+      } catch (err: unknown) {
+        if (err instanceof Error && err.name === 'AbortError') {
           return null;
         }
         console.warn('RVC speech synthesis fetch failed:', err);
@@ -550,7 +550,7 @@ export function useTTS(
         await audio.play();
         // Prefetch next sentences concurrently while audio is playing
         prefetchUpcoming(index);
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.warn('audio.play() error:', err);
       }
     },
@@ -561,6 +561,8 @@ export function useTTS(
       clearPrefetchCache,
       onSentenceChange,
       onChapterComplete,
+      startKeepAlive,
+      stopKeepAlive,
     ]
   );
 
@@ -610,7 +612,7 @@ export function useTTS(
       }
       stopKeepAlive();
     }
-  }, []);
+  }, [stopKeepAlive]);
 
   // Resume
   const resume = useCallback(() => {
@@ -640,7 +642,7 @@ export function useTTS(
         play(currentSentenceIndex);
       }
     }
-  }, [currentSentenceIndex, play, speakSentence, prefetchUpcoming]);
+  }, [currentSentenceIndex, play, speakSentence, prefetchUpcoming, startKeepAlive]);
 
   // Toggle Play / Pause
   const togglePlay = useCallback(() => {
@@ -672,7 +674,7 @@ export function useTTS(
       }
       stopKeepAlive();
     }
-  }, [clearPrefetchCache]);
+  }, [clearPrefetchCache, stopKeepAlive]);
 
   // Next Sentence
   const nextSentence = useCallback(() => {
@@ -822,7 +824,7 @@ export function useTTS(
       stopKeepAlive();
       clearPrefetchCache();
     };
-  }, [clearPrefetchCache]);
+  }, [clearPrefetchCache, stopKeepAlive]);
 
   return {
     voices,

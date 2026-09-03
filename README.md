@@ -1,5 +1,7 @@
 # VoxRead — Trình Đọc Sách Thông Minh với Giọng Đọc AI & RVC Local
 
+[![CI](https://github.com/caoduongle/reader/actions/workflows/ci.yml/badge.svg)](https://github.com/caoduongle/reader/actions/workflows/ci.yml)
+
 **VoxRead** là ứng dụng đọc sách điện tử (E-Reader) hiện đại hỗ trợ định dạng **TXT, EPUB, PDF** với khả năng tổng hợp giọng đọc Text-to-Speech (TTS) mượt mà. Ứng dụng kết hợp giữa giọng đọc Web Speech tự nhiên của hệ thống và công nghệ **nhân bản giọng nói AI (RVC — Retrieval-based Voice Conversion)** chạy cục bộ (offline) trên máy tính của bạn.
 
 ---
@@ -113,6 +115,21 @@ Dự án trang bị hệ thống kiểm thử tự động hai đầu:
      ```bash
      python-backend/venv/bin/pytest python-backend/tests
      ```
+
+---
+
+### 🚀 Tự Động Hóa CI/CD (GitHub Actions)
+
+Dự án thiết lập 2 luồng workflow chuyên biệt:
+
+1. **Continuous Integration ([`.github/workflows/ci.yml`](.github/workflows/ci.yml))**:
+   - **Kích hoạt**: Tự động chạy khi có `push` hoặc `pull_request` vào nhánh `main`.
+   - **Cơ chế**: Chạy song song 2 job trên `ubuntu-latest`:
+     - **`frontend`**: Cài đặt bằng `npm ci`, tuần tự kiểm tra `typecheck` $\rightarrow$ `lint` $\rightarrow$ `test` $\rightarrow$ `build` (dừng ngay lập tức nếu bước nào thất bại).
+     - **`backend`**: Cài đặt dependencies Python 3.10 và chạy `pytest`.
+2. **Đóng gói Desktop Installer ([`.github/workflows/build-electron.yml`](.github/workflows/build-electron.yml))**:
+   - **Kích hoạt**: Chạy thủ công trên giao diện GitHub (`workflow_dispatch`) hoặc tự động kích hoạt khi đẩy git tag phiên bản release (ví dụ: `v1.0.0`).
+   - **Cơ chế**: Chạy trên `windows-latest` để đóng gói tệp cài đặt `.exe` bằng `electron-builder` và tải artifact lên GitHub.
 
 ---
 

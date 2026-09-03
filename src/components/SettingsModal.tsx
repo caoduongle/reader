@@ -61,7 +61,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   settings,
   voices,
   rvcServerStatus,
-  serverErrorMessage,
   onCheckRVCHealth,
   onSaveSettings,
   onTestVoice,

@@ -10,8 +10,6 @@ import {
   Check,
   Search,
   Plus,
-  ArrowRight,
-  Sparkles,
 } from 'lucide-react';
 import { BookmarkItem, DocumentItem } from '../types';
 

@@ -7,23 +7,16 @@ import {
   Calendar,
   BookOpen,
   TrendingUp,
-  Award,
   Sparkles,
   BarChart2,
   RefreshCw,
-  Layers,
-  ChevronRight,
-  Info,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
-  LineChart,
-  Line,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   Area,
   AreaChart,
 } from 'recharts';
@@ -47,7 +40,6 @@ export const ReadingStatsModal: React.FC<ReadingStatsModalProps> = ({
   onResetStats,
 }) => {
   const [selectedMetric, setSelectedMetric] = useState<ChartMetric>('duration');
-  const [chartType, setChartType] = useState<'line' | 'area'>('area');
   const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   if (!isOpen) return null;
@@ -91,7 +83,13 @@ export const ReadingStatsModal: React.FC<ReadingStatsModalProps> = ({
       }[mascotType];
 
   // Custom Chart Tooltip
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  interface TooltipProps {
+    active?: boolean;
+    payload?: Array<{ payload: DailyReadingStat }>;
+    label?: string;
+  }
+
+  const CustomTooltip = ({ active, payload }: TooltipProps) => {
     if (active && payload && payload.length) {
       const data: DailyReadingStat = payload[0].payload;
       return (
