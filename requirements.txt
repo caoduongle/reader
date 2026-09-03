@@ -1,7 +1,0 @@
-flask
-edge-tts
-rvc-python==0.1.5
-
-# torch / torchaudio KHONG liet ke o day vi ban CUDA can khop voi GPU cua ban.
-# Cai theo huong dan rieng trong README.md (muc "Cai dat Python") TRUOC hoac
-# SAU khi chay `pip install -r requirements.txt` deu duoc.
