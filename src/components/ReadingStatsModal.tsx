@@ -559,3 +559,5 @@ export const ReadingStatsModal: React.FC<ReadingStatsModalProps> = ({
     </div>
   );
 };
+
+export default ReadingStatsModal;

@@ -7,13 +7,14 @@ import { ReaderNavbar } from './components/ReaderNavbar';
 import { ReaderContent } from './components/ReaderContent';
 import { ControlBar } from './components/ControlBar';
 import { MascotWidget } from './components/MascotWidget';
-import { SettingsModal } from './components/SettingsModal';
 import { UploadModal } from './components/UploadModal';
 import { TOCDrawer } from './components/TOCDrawer';
 import { SearchDrawer } from './components/SearchDrawer';
 import { BookmarksDrawer } from './components/BookmarksDrawer';
-import { ReadingStatsModal } from './components/ReadingStatsModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
+
+const SettingsModal = React.lazy(() => import('./components/SettingsModal'));
+const ReadingStatsModal = React.lazy(() => import('./components/ReadingStatsModal'));
 import { useReadingStats } from './hooks/useReadingStats';
 import { THEMES } from './utils/themeStyles';
 import {
@@ -538,20 +539,24 @@ export default function App() {
       />
 
       {/* Settings Modal */}
-      <SettingsModal
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-        settings={settings}
-        voices={voices}
-        rvcServerStatus={rvcServerStatus}
-        serverErrorMessage={serverErrorMessage}
-        onCheckRVCHealth={checkRVCServerHealth}
-        onSaveSettings={(newSettings: TTSSettings) => {
-          updateSettings(newSettings);
-          showToast('Settings saved');
-        }}
-        onTestVoice={testVoice}
-      />
+      {isSettingsOpen && (
+        <React.Suspense fallback={null}>
+          <SettingsModal
+            isOpen={isSettingsOpen}
+            onClose={() => setIsSettingsOpen(false)}
+            settings={settings}
+            voices={voices}
+            rvcServerStatus={rvcServerStatus}
+            serverErrorMessage={serverErrorMessage}
+            onCheckRVCHealth={checkRVCServerHealth}
+            onSaveSettings={(newSettings: TTSSettings) => {
+              updateSettings(newSettings);
+              showToast('Settings saved');
+            }}
+            onTestVoice={testVoice}
+          />
+        </React.Suspense>
+      )}
 
       {/* Upload & Import Modal */}
       <UploadModal
@@ -578,13 +583,17 @@ export default function App() {
       />
 
       {/* Reading Statistics Modal */}
-      <ReadingStatsModal
-        isOpen={isStatsOpen}
-        onClose={() => setIsStatsOpen(false)}
-        stats={readingStats}
-        mascotType={settings.mascotType}
-        onResetStats={resetStats}
-      />
+      {isStatsOpen && (
+        <React.Suspense fallback={null}>
+          <ReadingStatsModal
+            isOpen={isStatsOpen}
+            onClose={() => setIsStatsOpen(false)}
+            stats={readingStats}
+            mascotType={settings.mascotType}
+            onResetStats={resetStats}
+          />
+        </React.Suspense>
+      )}
     </div>
   );
 }

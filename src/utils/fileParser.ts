@@ -1,16 +1,34 @@
-import * as pdfjsLib from 'pdfjs-dist';
-import JSZip from 'jszip';
 import { parseNovelText } from './textParser';
 import { Chapter } from '../types';
 
 export const MAX_FILE_SIZE_MB = 100;
 export const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 
-// Configure pdfjs worker locally from bundled assets (offline-ready)
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.min.mjs',
-  import.meta.url
-).toString();
+// Lazy module singletons
+let pdfjsPromise: Promise<typeof import('pdfjs-dist')> | null = null;
+let jszipPromise: Promise<any> | null = null;
+
+async function getPdfJs(): Promise<typeof import('pdfjs-dist')> {
+  if (!pdfjsPromise) {
+    pdfjsPromise = import('pdfjs-dist').then((pdfjs) => {
+      if (!pdfjs.GlobalWorkerOptions.workerSrc) {
+        pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+          'pdfjs-dist/build/pdf.worker.min.mjs',
+          import.meta.url
+        ).toString();
+      }
+      return pdfjs;
+    });
+  }
+  return pdfjsPromise;
+}
+
+async function getJsZip(): Promise<any> {
+  if (!jszipPromise) {
+    jszipPromise = import('jszip').then((mod) => mod.default || mod);
+  }
+  return jszipPromise;
+}
 
 /**
  * Extracts plain text from a TXT or Markdown file.
@@ -40,7 +58,15 @@ export async function parsePdfFile(
     throw new DOMException('Parsing cancelled', 'AbortError');
   }
 
-  const arrayBuffer = await file.arrayBuffer();
+  const [pdfjsLib, arrayBuffer] = await Promise.all([
+    getPdfJs(),
+    file.arrayBuffer(),
+  ]);
+
+  if (signal?.aborted) {
+    throw new DOMException('Parsing cancelled', 'AbortError');
+  }
+
   const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) });
   const pdfDoc = await loadingTask.promise;
 
@@ -97,7 +123,15 @@ export async function parseEpubFile(
     throw new DOMException('Parsing cancelled', 'AbortError');
   }
 
-  const arrayBuffer = await file.arrayBuffer();
+  const [JSZip, arrayBuffer] = await Promise.all([
+    getJsZip(),
+    file.arrayBuffer(),
+  ]);
+
+  if (signal?.aborted) {
+    throw new DOMException('Parsing cancelled', 'AbortError');
+  }
+
   const zip = await JSZip.loadAsync(arrayBuffer);
 
   // 1. Find container.xml to locate the OPF file
