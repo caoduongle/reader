@@ -30,6 +30,7 @@ import {
   RVCServerStatus,
 } from '../types';
 import { THEMES, FONT_FAMILIES } from '../utils/themeStyles';
+import { useVoiceServerStatus } from '../hooks/useVoiceServerStatus';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -70,41 +71,35 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [voiceSearch, setVoiceSearch] = useState('');
   const [selectedLangFilter, setSelectedLangFilter] = useState<string>('all');
   const [showSavedFeedback, setShowSavedFeedback] = useState(false);
-  const [internalRVCStatus, setInternalRVCStatus] = useState<RVCServerStatus>(
-    rvcServerStatus || 'unknown'
-  );
-  const [isCheckingHealth, setIsCheckingHealth] = useState(false);
+  const {
+    status: polledStatus,
+    isChecking: isPollingChecking,
+    checkHealth: pollCheckHealth,
+  } = useVoiceServerStatus({
+    serverUrl: localSettings.rvcServerUrl || 'http://localhost:8008',
+    enabled: isOpen && localSettings.ttsProvider === 'rvc-local',
+    intervalMs: 6000,
+  });
+
+  const effectiveStatus: RVCServerStatus =
+    localSettings.ttsProvider === 'rvc-local'
+      ? polledStatus
+      : rvcServerStatus || 'unknown';
+
+  const isCheckingHealth = isPollingChecking;
 
   // Synchronize local settings when modal opens
   React.useEffect(() => {
     if (isOpen) {
       setLocalSettings(settings);
-      if (rvcServerStatus) {
-        setInternalRVCStatus(rvcServerStatus);
-      }
     }
-  }, [isOpen, settings, rvcServerStatus]);
+  }, [isOpen, settings]);
 
   const handleCheckHealth = async () => {
-    setIsCheckingHealth(true);
-    setInternalRVCStatus('checking');
     if (onCheckRVCHealth) {
-      const ok = await onCheckRVCHealth(localSettings.rvcServerUrl);
-      setInternalRVCStatus(ok ? 'connected' : 'unreachable');
-    } else {
-      try {
-        const cleanUrl = (localSettings.rvcServerUrl || 'http://localhost:8008').replace(
-          /\/+$/,
-          ''
-        );
-        const res = await fetch(`${cleanUrl}/health`);
-        const data = await res.json();
-        setInternalRVCStatus(data.ok ? 'connected' : 'unreachable');
-      } catch {
-        setInternalRVCStatus('unreachable');
-      }
+      await onCheckRVCHealth(localSettings.rvcServerUrl);
     }
-    setIsCheckingHealth(false);
+    await pollCheckHealth();
   };
 
   // Extract unique languages for tabs/filter
@@ -384,17 +379,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <div className="flex items-center space-x-2">
                       <span
                         className={`w-2.5 h-2.5 rounded-full ${
-                          internalRVCStatus === 'connected'
+                          effectiveStatus === 'connected'
                             ? 'bg-emerald-500 ring-2 ring-emerald-500/30'
-                            : internalRVCStatus === 'checking'
+                            : effectiveStatus === 'checking'
                               ? 'bg-amber-500 animate-pulse'
                               : 'bg-rose-500 ring-2 ring-rose-500/30'
                         }`}
                       />
                       <span className="text-xs font-mono text-slate-300">
-                        {internalRVCStatus === 'connected'
+                        {effectiveStatus === 'connected'
                           ? 'Đã kết nối'
-                          : internalRVCStatus === 'checking'
+                          : effectiveStatus === 'checking'
                             ? 'Đang kiểm tra...'
                             : 'Chưa kết nối'}
                       </span>
@@ -499,7 +494,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </div>
 
                   {/* Warning banner when unreachable */}
-                  {internalRVCStatus === 'unreachable' && (
+                  {effectiveStatus === 'unreachable' && (
                     <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-start space-x-2.5 text-xs text-rose-300">
                       <AlertCircle className="w-4 h-4 shrink-0 text-rose-400 mt-0.5" />
                       <div className="space-y-1">
@@ -508,18 +503,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           {localSettings.rvcServerUrl || 'http://localhost:8008'}
                         </div>
                         <div className="text-[11px] text-rose-300/80">
-                          Server Python có đang chạy không? Hãy kiểm tra hoặc chạy:
+                          Server Python có đang chạy không? Hãy chạy{' '}
+                          <code className="mx-1 px-1.5 py-0.5 bg-black/40 rounded text-amber-300 font-mono">
+                            python server.py
+                          </code>{' '}
+                          (hoặc{' '}
                           <code className="mx-1 px-1.5 py-0.5 bg-black/40 rounded text-amber-300 font-mono">
                             python python-backend/server.py
                           </code>
-                          hoặc chuyển về &quot;Giọng máy (mặc định)&quot; để tiếp tục đọc sách.
+                          ) trong terminal rồi thử lại, hoặc chuyển về &quot;Giọng máy (mặc định)&quot; để tiếp tục đọc sách.
                         </div>
                       </div>
                     </div>
                   )}
 
                   {/* Info notice when connected */}
-                  {internalRVCStatus === 'connected' && (
+                  {effectiveStatus === 'connected' && (
                     <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center space-x-2 text-xs text-emerald-300">
                       <Check className="w-4 h-4 text-emerald-400 shrink-0" />
                       <span>
