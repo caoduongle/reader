@@ -1,8 +1,0 @@
-Copy 2 file ban tai tu Google Drive (thu muc ApplioExported/) sau khi train xong o Colab vao day:
-
-  - <ten_model>.pth
-  - <ten_model>.index   (file .index thuong co ten dai kieu added_IVF..._v2.index, doi lai cho gon cung duoc)
-
-Sau do mo server.py, sua MODEL_PATH va INDEX_PATH cho khop dung ten file ban vua copy vao.
-
-Xoa file .txt nay di cung duoc, no chi la placeholder de thu muc model/ khong bi rong.

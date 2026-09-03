@@ -52,60 +52,57 @@ flowchart TD
 
 ## 🚀 Bắt đầu nhanh (Quickstart)
 
-Tùy theo nhu cầu của bạn, vui lòng chọn hướng dẫn phù hợp bên dưới:
+### ⚡ Thiết lập môi trường tự động 1 lệnh (Khuyến nghị)
 
-### Nhóm 1: Dành cho người muốn chạy / phát triển app đọc chính (React / Electron)
+Dự án cung cấp sẵn script tự động kiểm tra phiên bản Node.js & Python, cài đặt dependencies JavaScript (`npm install`), và cấu hình môi trường ảo Python virtualenv cho backend:
 
-Không yêu cầu cài đặt Python hay GPU. Bạn có thể sử dụng ngay giọng đọc có sẵn của trình duyệt/hệ điều hành:
+- **Trên Windows (PowerShell)**:
+  ```powershell
+  powershell -ExecutionPolicy Bypass -File scripts/setup.ps1
+  ```
+  *(Hoặc chạy `.\scripts\setup.ps1` nếu bạn đã mở sẵn terminal PowerShell)*.
 
-1. **Cài đặt dependencies**:
-   ```bash
-   npm install
-   ```
-
-2. **Chạy ứng dụng**:
-   - **Bản Web** (xem tại `http://localhost:3000`):
-     ```bash
-     npm run dev
-     ```
-   - **Bản Desktop Windows (Electron)**:
-     ```bash
-     npm run electron:dev
-     ```
-
-3. **Đóng gói ứng dụng desktop**:
-   ```bash
-   npm run electron:build
-   ```
-   Tệp cài đặt `.exe` sẽ được tạo trong thư mục `release/`.
+- **Trên macOS / Linux (Bash)**:
+  ```bash
+  chmod +x scripts/setup.sh
+  ./scripts/setup.sh
+  ```
 
 ---
 
-### Nhóm 2: Dành cho người muốn có giọng đọc của riêng mình (RVC Local Server)
+### 📖 Khởi động ứng dụng
 
-Dành cho người muốn đọc sách bằng chính giọng nói của bản thân hoặc một giọng đọc AI tuỳ chỉnh:
+Sau khi chạy script thiết lập xong, bạn có thể khởi động ngay:
 
-1. **Điều kiện tiên quyết**:
-   - Máy tính cài sẵn **Python 3.10**.
-   - Khuyến nghị GPU NVIDIA (hỗ trợ CUDA) để tốc độ đọc dưới 1 giây/câu.
-   - Có sẵn file model RVC (`.pth` và `.index`) từ quá trình huấn luyện.
+- **Chạy bản Web** (mở tại `http://localhost:3000`):
+  ```bash
+  npm run dev
+  ```
+- **Chạy bản Desktop Windows (Electron)**:
+  ```bash
+  npm run electron:dev
+  ```
+- **Đóng gói bộ cài đặt Desktop (.exe)**:
+  ```bash
+  npm run electron:build
+  ```
 
-2. **Cài đặt môi trường Python**:
-   ```powershell
-   cd python-backend
-   py -3.10 -m venv venv
-   venv\Scripts\activate
-   pip install -r requirements.txt
-   ```
-   *(Nếu có GPU NVIDIA, hãy cài PyTorch CUDA tương ứng theo hướng dẫn chi tiết)*.
+---
 
-3. **Đặt file model và khởi chạy server**:
-   - Đặt file `.pth` và `.index` vào thư mục `python-backend/model/`.
-   - Chạy server:
+### 🎙️ Cấu hình giọng đọc cá nhân RVC (Tùy chọn)
+
+Dành cho người muốn đọc sách bằng chính giọng AI của bản thân:
+
+1. **Đặt file model**:
+   - Copy 2 file `.pth` và `.index` vào thư mục `python-backend/model/`.
+2. **Khởi chạy server RVC**:
+   - Chạy lệnh:
      ```bash
+     cd python-backend
+     venv\Scripts\activate
      python server.py
      ```
-   - Server lắng nghe tại `http://localhost:8008`. Mở ứng dụng VoxRead $\rightarrow$ vào **Cài đặt** $\rightarrow$ chọn nguồn giọng **"Giọng của tôi (Local RVC)"** để bắt đầu nghe.
+   - Server lắng nghe tại `http://localhost:8008`. Mở VoxRead $\rightarrow$ vào **Cài đặt** $\rightarrow$ chọn nguồn giọng **"Giọng của tôi (Local RVC)"** để bắt đầu nghe.
 
 > 📖 **Hướng dẫn chi tiết toàn tập về RVC**:  
 > Xem toàn bộ hướng dẫn chuẩn bị dataset, khử ồn audio, và các bước huấn luyện model miễn phí trên Google Colab tại:  
