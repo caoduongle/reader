@@ -177,7 +177,8 @@ export const ReadingStatsModal: React.FC<ReadingStatsModalProps> = ({
                   Chưa có dữ liệu đọc sách
                 </h4>
                 <p className="text-xs text-slate-400 max-w-sm leading-relaxed">
-                  Bắt đầu đọc hoặc nghe sách bằng giọng đọc để theo dõi thời gian, tốc độ và số từ đã đọc mỗi ngày tại đây.
+                  Bắt đầu đọc hoặc nghe sách bằng giọng đọc để theo dõi thời gian, tốc độ và số từ
+                  đã đọc mỗi ngày tại đây.
                 </p>
               </div>
             </div>
@@ -348,7 +349,7 @@ export const ReadingStatsModal: React.FC<ReadingStatsModalProps> = ({
                     fontSize={11}
                     tickLine={false}
                     axisLine={{ stroke: '#333' }}
-                    tickFormatter={(val) =>
+                    tickFormatter={val =>
                       selectedMetric === 'words' && val >= 1000
                         ? `${(val / 1000).toFixed(1)}k`
                         : val
@@ -408,8 +409,8 @@ export const ReadingStatsModal: React.FC<ReadingStatsModalProps> = ({
                       selectedMetric === 'duration'
                         ? '#f59e0b'
                         : selectedMetric === 'words'
-                        ? '#10b981'
-                        : '#06b6d4',
+                          ? '#10b981'
+                          : '#06b6d4',
                   }}
                 />
                 <span>
@@ -418,14 +419,27 @@ export const ReadingStatsModal: React.FC<ReadingStatsModalProps> = ({
                     {selectedMetric === 'duration'
                       ? 'Daily Session Duration (Minutes)'
                       : selectedMetric === 'words'
-                      ? 'Total Words Read Daily'
-                      : 'Average Words Per Minute'}
+                        ? 'Total Words Read Daily'
+                        : 'Average Words Per Minute'}
                   </strong>
                 </span>
               </div>
               <span className="font-mono text-slate-400">
-                Peak: {Math.max(...stats.dailyStats.map((d) => (selectedMetric === 'duration' ? d.durationMinutes : selectedMetric === 'words' ? d.wordsRead : d.wpm)))}{' '}
-                {selectedMetric === 'duration' ? 'mins' : selectedMetric === 'words' ? 'words' : 'WPM'}
+                Peak:{' '}
+                {Math.max(
+                  ...stats.dailyStats.map(d =>
+                    selectedMetric === 'duration'
+                      ? d.durationMinutes
+                      : selectedMetric === 'words'
+                        ? d.wordsRead
+                        : d.wpm
+                  )
+                )}{' '}
+                {selectedMetric === 'duration'
+                  ? 'mins'
+                  : selectedMetric === 'words'
+                    ? 'words'
+                    : 'WPM'}
               </span>
             </div>
           </div>
@@ -443,9 +457,12 @@ export const ReadingStatsModal: React.FC<ReadingStatsModalProps> = ({
             </div>
 
             <div className="grid grid-cols-1 gap-2">
-              {stats.dailyStats.map((day) => {
-                const maxDailyMin = Math.max(...stats.dailyStats.map((d) => d.durationMinutes), 1);
-                const percent = Math.min(100, Math.round((day.durationMinutes / maxDailyMin) * 100));
+              {stats.dailyStats.map(day => {
+                const maxDailyMin = Math.max(...stats.dailyStats.map(d => d.durationMinutes), 1);
+                const percent = Math.min(
+                  100,
+                  Math.round((day.durationMinutes / maxDailyMin) * 100)
+                );
                 const isToday = day.dayLabel === 'Today';
 
                 return (
@@ -510,9 +527,7 @@ export const ReadingStatsModal: React.FC<ReadingStatsModalProps> = ({
             <div className="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
               <Sparkles className="w-5 h-5" />
             </div>
-            <div className="text-xs text-slate-300 leading-relaxed italic">
-              {mascotComment}
-            </div>
+            <div className="text-xs text-slate-300 leading-relaxed italic">{mascotComment}</div>
           </div>
         </div>
 

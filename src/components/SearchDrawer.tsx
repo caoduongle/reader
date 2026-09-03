@@ -25,7 +25,7 @@ export const SearchDrawer: React.FC<SearchDrawerProps> = ({
 
     document.chapters.forEach((chapter, cIdx) => {
       chapter.paragraphs.forEach((p, pIdx) => {
-        p.sentences.forEach((s) => {
+        p.sentences.forEach(s => {
           if (s.text.toLowerCase().includes(lowerQuery)) {
             // Create snippet with highlighted match
             results.push({
@@ -78,12 +78,16 @@ export const SearchDrawer: React.FC<SearchDrawerProps> = ({
               autoFocus
               placeholder="Type word or phrase to search..."
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={e => setQuery(e.target.value)}
               className="w-full pl-9 pr-3 py-2 bg-white/5 border border-white/10 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
             />
           </div>
           <div className="mt-1.5 text-[11px] text-slate-400 flex justify-between px-1">
-            <span>{query.length >= 2 ? `${matches.length} matches found` : 'Enter at least 2 characters'}</span>
+            <span>
+              {query.length >= 2
+                ? `${matches.length} matches found`
+                : 'Enter at least 2 characters'}
+            </span>
           </div>
         </div>
 
@@ -105,9 +109,7 @@ export const SearchDrawer: React.FC<SearchDrawerProps> = ({
                   <CornerDownLeft className="w-3 h-3" />
                 </span>
               </div>
-              <p className="text-slate-300 font-serif leading-relaxed line-clamp-3">
-                {m.text}
-              </p>
+              <p className="text-slate-300 font-serif leading-relaxed line-clamp-3">{m.text}</p>
             </div>
           ))}
 

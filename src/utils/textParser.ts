@@ -21,16 +21,14 @@ export function splitIntoSentences(text: string): string[] {
   // Match sentences ending with ., !, ?, or Japanese punctuation 。, ！, ？
   // followed by space, quote, or end of text
   const rawSentences: string[] = [];
-  const regex = /([^.!?。！？\n]+[.!?。！？]+["'”’»\)\]]*|[^.!?。！？\n]+$)/g;
-  
+  const regex = /([^.!?。！？\n]+[.!?。！？]+["'”’»)\]]*|[^.!?。！？\n]+$)/g;
+
   let match: RegExpExecArray | null;
   while ((match = regex.exec(protectedText)) !== null) {
     const matchedStr = match[0].trim();
     if (matchedStr) {
       // Restore placeholder dots
-      const restored = matchedStr
-        .replace(/§DOT§/g, '.')
-        .replace(/§DEC§/g, '.');
+      const restored = matchedStr.replace(/§DOT§/g, '.').replace(/§DEC§/g, '.');
       rawSentences.push(restored);
     }
   }
@@ -46,15 +44,20 @@ export function splitIntoSentences(text: string): string[] {
 /**
  * Parses raw text into chapters, paragraphs, and indexed sentences.
  */
-export function parseNovelText(rawText: string, defaultTitle: string = 'Untitled Document'): Chapter[] {
+export function parseNovelText(
+  rawText: string,
+  defaultTitle: string = 'Untitled Document'
+): Chapter[] {
   if (!rawText || !rawText.trim()) {
-    return [{
-      id: 'chap-default',
-      title: defaultTitle,
-      paragraphs: [],
-      totalSentences: 0,
-      wordCount: 0
-    }];
+    return [
+      {
+        id: 'chap-default',
+        title: defaultTitle,
+        paragraphs: [],
+        totalSentences: 0,
+        wordCount: 0,
+      },
+    ];
   }
 
   // Normalize line endings
@@ -62,8 +65,9 @@ export function parseNovelText(rawText: string, defaultTitle: string = 'Untitled
 
   // Detect potential chapter markers
   // e.g. "Chapter 1", "Chương 1", "CHAPTER I", "Part 1", "Phần 1", "# Chapter", etc.
-  const chapterRegex = /(?:^|\n)(?=(?:(?:CHAPTER|Chapter|CHƯƠNG|Chương|CH|Hồi|Phần|PART|Part|Section|Mục|#)\s+(?:\d+|[IVXLCDM]+|[A-Za-z]+)(?:[:.-].*)?|\*{3,}|#{1,3}\s+.*)(?:\n|$))/i;
-  
+  const chapterRegex =
+    /(?:^|\n)(?=(?:(?:CHAPTER|Chapter|CHƯƠNG|Chương|CH|Hồi|Phần|PART|Part|Section|Mục|#)\s+(?:\d+|[IVXLCDM]+|[A-Za-z]+)(?:[:.-].*)?|\*{3,}|#{1,3}\s+.*)(?:\n|$))/i;
+
   const rawChapterChunks = normalized.split(chapterRegex);
 
   // If no chapter divisions detected or only 1 chunk, treat as 1 chapter
@@ -72,7 +76,7 @@ export function parseNovelText(rawText: string, defaultTitle: string = 'Untitled
   if (rawChapterChunks.length <= 1) {
     chapterSections.push({
       title: defaultTitle,
-      content: normalized
+      content: normalized,
     });
   } else {
     rawChapterChunks.forEach((chunk, index) => {
@@ -83,8 +87,11 @@ export function parseNovelText(rawText: string, defaultTitle: string = 'Untitled
       const firstLine = lines[0].trim();
 
       // Check if first line looks like a chapter title
-      const isTitleLine = /^(?:CHAPTER|Chapter|CHƯƠNG|Chương|CH|Hồi|Phần|PART|Part|Section|Mục|#|\*{3})/i.test(firstLine) || firstLine.length < 80;
-      
+      const isTitleLine =
+        /^(?:CHAPTER|Chapter|CHƯƠNG|Chương|CH|Hồi|Phần|PART|Part|Section|Mục|#|\*{3})/i.test(
+          firstLine
+        ) || firstLine.length < 80;
+
       let title = `Chapter ${chapterSections.length + 1}`;
       let content = trimmed;
 
@@ -123,7 +130,7 @@ export function parseNovelText(rawText: string, defaultTitle: string = 'Untitled
           globalIndex: globalSentenceCounter++,
           paragraphIndex: pIdx,
           sentenceIndex: sIdx,
-          text: sText
+          text: sText,
         };
         return item;
       });
@@ -133,7 +140,7 @@ export function parseNovelText(rawText: string, defaultTitle: string = 'Untitled
           id: `c${chapIdx}-p${pIdx}`,
           paragraphIndex: pIdx,
           sentences,
-          rawText: pText
+          rawText: pText,
         });
       }
     });
@@ -145,7 +152,7 @@ export function parseNovelText(rawText: string, defaultTitle: string = 'Untitled
       title: sec.title || `Chapter ${chapIdx + 1}`,
       paragraphs,
       totalSentences: globalSentenceCounter,
-      wordCount: totalWords
+      wordCount: totalWords,
     };
   });
 }

@@ -97,7 +97,7 @@ async function startPythonBackend(): Promise<void> {
       stdio: 'ignore',
     });
 
-    pythonProcess.on('error', (err) => {
+    pythonProcess.on('error', err => {
       console.error('Failed to spawn Python process:', err);
     });
 
@@ -122,7 +122,7 @@ async function startPythonBackend(): Promise<void> {
       } catch {
         // Retry
       }
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await new Promise(resolve => setTimeout(resolve, 1000));
     }
 
     if (!isReady) {
@@ -181,13 +181,13 @@ function createWindow(): void {
     const primaryPath = path.join(__dirname, '..', 'dist', 'index.html');
     const appPath = path.join(app.getAppPath(), 'dist', 'index.html');
     const indexPath = fs.existsSync(primaryPath) ? primaryPath : appPath;
-    mainWindow.loadFile(indexPath).catch((err) => {
+    mainWindow.loadFile(indexPath).catch(err => {
       console.error('Failed to load local index.html:', err);
     });
   }
 
   // Intercept window close (X) to hide into tray instead of exiting
-  mainWindow.on('close', (event) => {
+  mainWindow.on('close', event => {
     if (!isQuitting) {
       event.preventDefault();
       mainWindow?.hide();
@@ -247,7 +247,7 @@ function killPythonBackend(): void {
     console.log(`Terminating Python process tree for PID ${pid}...`);
     try {
       if (process.platform === 'win32') {
-        exec(`taskkill /F /T /PID ${pid}`, (err) => {
+        exec(`taskkill /F /T /PID ${pid}`, err => {
           if (err) {
             console.warn(`taskkill failed for PID ${pid}:`, err.message);
           }

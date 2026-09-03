@@ -77,11 +77,10 @@ export const ReaderContent: React.FC<ReaderContentProps> = ({
       <div className={`flex-1 flex items-center justify-center p-8 ${themeConfig.readerBg}`}>
         <div className="text-center max-w-md p-8 rounded-2xl bg-[#16161A] border border-white/10 space-y-4 shadow-2xl">
           <BookOpen className="w-12 h-12 text-amber-500 mx-auto" />
-          <h3 className="text-xl font-bold text-white">
-            No Document Loaded
-          </h3>
+          <h3 className="text-xl font-bold text-white">No Document Loaded</h3>
           <p className="text-sm text-slate-400">
-            Import a novel file (.txt, .pdf, .epub) or select a classic story to begin reading with voice synthesis.
+            Import a novel file (.txt, .pdf, .epub) or select a classic story to begin reading with
+            voice synthesis.
           </p>
           <button
             onClick={onOpenUpload}
@@ -122,20 +121,22 @@ export const ReaderContent: React.FC<ReaderContentProps> = ({
             <span>•</span>
             <span className="flex items-center space-x-1">
               <Clock className="w-3.5 h-3.5" />
-              <span>~{Math.max(1, Math.ceil(currentChapter.wordCount / (200 * settings.rate)))} min read</span>
+              <span>
+                ~{Math.max(1, Math.ceil(currentChapter.wordCount / (200 * settings.rate)))} min read
+              </span>
             </span>
           </div>
         </header>
 
         {/* Paragraphs and Highlightable Sentences */}
         <article className="space-y-6 reader-article-body text-slate-300 font-serif">
-          {currentChapter.paragraphs.map((paragraph) => (
+          {currentChapter.paragraphs.map(paragraph => (
             <p
               key={paragraph.id}
               id={`reader-paragraph-${paragraph.paragraphIndex}`}
               className="relative text-justify leading-relaxed transition-all"
             >
-              {paragraph.sentences.map((sentence) => {
+              {paragraph.sentences.map(sentence => {
                 const isActive = sentence.globalIndex === currentSentenceIndex;
                 const isBookmarked = bookmarkedSentenceIndices.has(sentence.globalIndex);
                 const highlightClass = getHighlightClass(

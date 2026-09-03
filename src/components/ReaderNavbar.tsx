@@ -53,7 +53,8 @@ export const ReaderNavbar: React.FC<ReaderNavbarProps> = ({
 }) => {
   const [showThemeMenu, setShowThemeMenu] = useState(false);
 
-  const isDark = settings.theme === 'dark' || settings.theme === 'midnight' || settings.theme === 'forest';
+  const isDark =
+    settings.theme === 'dark' || settings.theme === 'midnight' || settings.theme === 'forest';
 
   const themeIcons: Record<ThemeMode, React.ReactNode> = {
     sepia: <Coffee className="w-4 h-4 text-amber-600" />,
@@ -94,7 +95,9 @@ export const ReaderNavbar: React.FC<ReaderNavbarProps> = ({
             onClick={onOpenTOC}
             title="Click to view chapters"
             className={`flex items-center space-x-2 px-2.5 py-1 rounded-lg cursor-pointer transition-colors max-w-[180px] md:max-w-xs lg:max-w-md ${
-              isDark ? 'bg-white/5 border border-white/10 hover:bg-white/10 text-slate-200' : 'hover:bg-amber-50 border border-transparent'
+              isDark
+                ? 'bg-white/5 border border-white/10 hover:bg-white/10 text-slate-200'
+                : 'hover:bg-amber-50 border border-transparent'
             }`}
           >
             <span className="text-xs font-medium truncate text-slate-200">
@@ -127,7 +130,9 @@ export const ReaderNavbar: React.FC<ReaderNavbarProps> = ({
           onClick={onOpenTOC}
           title="Chapters & Table of Contents"
           className={`p-2 rounded-lg transition-colors cursor-pointer ${
-            isDark ? 'bg-white/5 border border-white/10 hover:bg-white/10 text-slate-400 hover:text-white' : 'hover:bg-neutral-100 text-neutral-700'
+            isDark
+              ? 'bg-white/5 border border-white/10 hover:bg-white/10 text-slate-400 hover:text-white'
+              : 'hover:bg-neutral-100 text-neutral-700'
           }`}
         >
           <Compass className="w-4 h-4" />
@@ -142,8 +147,8 @@ export const ReaderNavbar: React.FC<ReaderNavbarProps> = ({
             bookmarkCount > 0
               ? 'bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20'
               : isDark
-              ? 'bg-white/5 border border-white/10 hover:bg-white/10 text-slate-400 hover:text-white'
-              : 'hover:bg-neutral-100 text-neutral-700'
+                ? 'bg-white/5 border border-white/10 hover:bg-white/10 text-slate-400 hover:text-white'
+                : 'hover:bg-neutral-100 text-neutral-700'
           }`}
         >
           <Bookmark className="w-4 h-4" />
@@ -158,13 +163,17 @@ export const ReaderNavbar: React.FC<ReaderNavbarProps> = ({
         <button
           id="navbar-quick-bookmark-btn"
           onClick={onQuickToggleCurrentBookmark}
-          title={isCurrentBookmarked ? 'Bookmarked! Click to remove bookmark' : 'Bookmark Current Position'}
+          title={
+            isCurrentBookmarked
+              ? 'Bookmarked! Click to remove bookmark'
+              : 'Bookmark Current Position'
+          }
           className={`p-2 rounded-lg transition-colors cursor-pointer ${
             isCurrentBookmarked
               ? 'bg-amber-500 text-black font-bold shadow-md shadow-amber-500/20'
               : isDark
-              ? 'bg-white/5 border border-white/10 hover:bg-white/10 text-slate-400 hover:text-amber-400'
-              : 'hover:bg-neutral-100 text-neutral-700'
+                ? 'bg-white/5 border border-white/10 hover:bg-white/10 text-slate-400 hover:text-amber-400'
+                : 'hover:bg-neutral-100 text-neutral-700'
           }`}
         >
           <BookmarkPlus className="w-4 h-4" />
@@ -176,7 +185,9 @@ export const ReaderNavbar: React.FC<ReaderNavbarProps> = ({
           onClick={onOpenSearch}
           title="Find text in document"
           className={`p-2 rounded-lg transition-colors cursor-pointer ${
-            isDark ? 'bg-white/5 border border-white/10 hover:bg-white/10 text-slate-400 hover:text-white' : 'hover:bg-neutral-100 text-neutral-700'
+            isDark
+              ? 'bg-white/5 border border-white/10 hover:bg-white/10 text-slate-400 hover:text-white'
+              : 'hover:bg-neutral-100 text-neutral-700'
           }`}
         >
           <Search className="w-4 h-4" />
@@ -185,7 +196,9 @@ export const ReaderNavbar: React.FC<ReaderNavbarProps> = ({
         {/* Font Size Quick Tweak (A- / A+) */}
         <div
           className={`hidden md:flex items-center space-x-1 px-1.5 py-1 rounded-lg border ${
-            isDark ? 'border-white/10 bg-white/5 text-slate-300' : 'border-neutral-200 bg-neutral-50'
+            isDark
+              ? 'border-white/10 bg-white/5 text-slate-300'
+              : 'border-neutral-200 bg-neutral-50'
           }`}
         >
           <button
@@ -214,7 +227,9 @@ export const ReaderNavbar: React.FC<ReaderNavbarProps> = ({
             onClick={() => setShowThemeMenu(!showThemeMenu)}
             title="Switch Reading Theme"
             className={`p-2 rounded-lg transition-colors cursor-pointer ${
-              isDark ? 'bg-white/5 border border-white/10 hover:bg-white/10 text-slate-400 hover:text-white' : 'hover:bg-neutral-100'
+              isDark
+                ? 'bg-white/5 border border-white/10 hover:bg-white/10 text-slate-400 hover:text-white'
+                : 'hover:bg-neutral-100'
             }`}
           >
             {themeIcons[settings.theme] || <Palette className="w-4 h-4 text-amber-500" />}
@@ -223,13 +238,15 @@ export const ReaderNavbar: React.FC<ReaderNavbarProps> = ({
           {showThemeMenu && (
             <div
               className={`absolute top-full right-0 mt-2 p-2 rounded-2xl shadow-2xl border backdrop-blur-xl z-50 min-w-[180px] space-y-1 ${
-                isDark ? 'bg-[#16161A] border-white/10 text-slate-200' : 'bg-white/95 border-neutral-200'
+                isDark
+                  ? 'bg-[#16161A] border-white/10 text-slate-200'
+                  : 'bg-white/95 border-neutral-200'
               }`}
             >
               <div className="text-[10px] uppercase font-bold tracking-wider px-2 py-1 text-slate-500">
                 Theme Palette
               </div>
-              {(Object.keys(THEMES) as ThemeMode[]).map((themeKey) => {
+              {(Object.keys(THEMES) as ThemeMode[]).map(themeKey => {
                 const t = THEMES[themeKey];
                 const isSelected = settings.theme === themeKey;
                 return (
@@ -243,8 +260,8 @@ export const ReaderNavbar: React.FC<ReaderNavbarProps> = ({
                       isSelected
                         ? 'bg-amber-600 text-black font-bold shadow-sm'
                         : isDark
-                        ? 'hover:bg-white/5 text-slate-300 hover:text-white'
-                        : 'hover:bg-neutral-100 text-neutral-800'
+                          ? 'hover:bg-white/5 text-slate-300 hover:text-white'
+                          : 'hover:bg-neutral-100 text-neutral-800'
                     }`}
                   >
                     <div className="flex items-center space-x-2">
@@ -271,8 +288,8 @@ export const ReaderNavbar: React.FC<ReaderNavbarProps> = ({
             settings.mascotEnabled
               ? 'text-amber-400 bg-amber-500/15 border border-amber-500/30 shadow-sm'
               : isDark
-              ? 'bg-white/5 border border-white/10 hover:bg-white/10 text-slate-500 hover:text-slate-300'
-              : 'hover:bg-neutral-100 text-neutral-400'
+                ? 'bg-white/5 border border-white/10 hover:bg-white/10 text-slate-500 hover:text-slate-300'
+                : 'hover:bg-neutral-100 text-neutral-400'
           }`}
         >
           {settings.mascotEnabled ? (
@@ -302,7 +319,9 @@ export const ReaderNavbar: React.FC<ReaderNavbarProps> = ({
           onClick={onOpenSettings}
           title="TTS & Voice Settings"
           className={`p-2 rounded-lg transition-colors cursor-pointer ${
-            isDark ? 'bg-white/5 border border-white/10 hover:bg-white/10 text-slate-400 hover:text-white' : 'hover:bg-neutral-100 text-neutral-700'
+            isDark
+              ? 'bg-white/5 border border-white/10 hover:bg-white/10 text-slate-400 hover:text-white'
+              : 'hover:bg-neutral-100 text-neutral-700'
           }`}
         >
           <Settings className="w-4 h-4" />

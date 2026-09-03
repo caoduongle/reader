@@ -36,9 +36,7 @@ export const TOCDrawer: React.FC<TOCDrawerProps> = ({
             </div>
             <div>
               <h3 className="font-bold text-sm text-white">Table of Contents</h3>
-              <p className="text-[11px] text-slate-400 truncate max-w-[200px]">
-                {document.title}
-              </p>
+              <p className="text-[11px] text-slate-400 truncate max-w-[200px]">{document.title}</p>
             </div>
           </div>
           <button
@@ -86,9 +84,7 @@ export const TOCDrawer: React.FC<TOCDrawerProps> = ({
                   </div>
                 </div>
 
-                {isCurrent && (
-                  <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0 mt-1" />
-                )}
+                {isCurrent && <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0 mt-1" />}
               </div>
             );
           })}

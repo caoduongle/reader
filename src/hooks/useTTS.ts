@@ -1,11 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import {
-  TTSVoiceOption,
-  TTSSettings,
-  SentenceItem,
-  TTSProvider,
-  RVCServerStatus,
-} from '../types';
+import { TTSVoiceOption, TTSSettings, SentenceItem, TTSProvider, RVCServerStatus } from '../types';
 
 export const DEFAULT_SETTINGS: TTSSettings = {
   ttsProvider: 'browser',
@@ -123,7 +117,7 @@ export function useTTS(
 
   // Clear prefetch cache & revoke object URLs
   const clearPrefetchCache = useCallback(() => {
-    prefetchCacheRef.current.forEach((entry) => {
+    prefetchCacheRef.current.forEach(entry => {
       if (entry.abortController) {
         try {
           entry.abortController.abort();
@@ -153,10 +147,11 @@ export function useTTS(
 
   // Server health probe
   const checkRVCServerHealth = useCallback(async (customUrl?: string): Promise<boolean> => {
-    const targetUrl = (customUrl || settingsRef.current.rvcServerUrl || 'http://localhost:8008').replace(
-      /\/+$/,
-      ''
-    );
+    const targetUrl = (
+      customUrl ||
+      settingsRef.current.rvcServerUrl ||
+      'http://localhost:8008'
+    ).replace(/\/+$/, '');
     setRvcServerStatus('checking');
     try {
       const controller = new AbortController();
@@ -194,7 +189,7 @@ export function useTTS(
     const rawVoices = window.speechSynthesis.getVoices();
     if (rawVoices.length === 0) return;
 
-    const formatted: TTSVoiceOption[] = rawVoices.map((v) => {
+    const formatted: TTSVoiceOption[] = rawVoices.map(v => {
       let genderGuess: 'Male' | 'Female' | 'Neutral' = 'Neutral';
       const lower = v.name.toLowerCase();
       if (
@@ -248,11 +243,11 @@ export function useTTS(
 
     setVoices(formatted);
 
-    setSettings((prev) => {
+    setSettings(prev => {
       if (!prev.voiceURI && formatted.length > 0) {
         const defaultVoice =
-          formatted.find((v) => v.default) ||
-          formatted.find((v) => v.lang.startsWith('en')) ||
+          formatted.find(v => v.default) ||
+          formatted.find(v => v.lang.startsWith('en')) ||
           formatted[0];
         return { ...prev, voiceURI: defaultVoice.voiceURI };
       }
@@ -292,7 +287,11 @@ export function useTTS(
 
   // Helper to fetch RVC speech audio blob from server
   const fetchRVCSpeech = useCallback(
-    async (text: string, serverUrl: string, abortController?: AbortController): Promise<string | null> => {
+    async (
+      text: string,
+      serverUrl: string,
+      abortController?: AbortController
+    ): Promise<string | null> => {
       const cleanUrl = serverUrl.replace(/\/+$/, '');
       try {
         const res = await fetch(`${cleanUrl}/speak`, {
@@ -343,7 +342,7 @@ export function useTTS(
         if (!text) continue;
 
         const controller = new AbortController();
-        const fetchPromise = fetchRVCSpeech(text, serverUrl, controller).then((blobUrl) => {
+        const fetchPromise = fetchRVCSpeech(text, serverUrl, controller).then(blobUrl => {
           inFlightFetchesRef.current.delete(targetIdx);
           if (blobUrl) {
             prefetchCacheRef.current.set(targetIdx, { blobUrl, abortController: controller });
@@ -409,16 +408,14 @@ export function useTTS(
 
         if (settingsRef.current.voiceURI) {
           const rawVoices = window.speechSynthesis.getVoices();
-          const selectedVoice = rawVoices.find(
-            (v) => v.voiceURI === settingsRef.current.voiceURI
-          );
+          const selectedVoice = rawVoices.find(v => v.voiceURI === settingsRef.current.voiceURI);
           if (selectedVoice) {
             utterance.voice = selectedVoice;
             utterance.lang = selectedVoice.lang;
           }
         }
 
-        utterance.onboundary = (event) => {
+        utterance.onboundary = event => {
           if (event.name === 'word') {
             setCurrentWordCharIndex(event.charIndex);
           }
@@ -451,7 +448,7 @@ export function useTTS(
           }
         };
 
-        utterance.onerror = (e) => {
+        utterance.onerror = e => {
           if (e.error !== 'canceled' && e.error !== 'interrupted') {
             console.warn('Speech synthesis error:', e);
           }
@@ -542,7 +539,7 @@ export function useTTS(
         }
       };
 
-      audio.onerror = (e) => {
+      audio.onerror = e => {
         console.warn('Audio element error:', e);
         setIsPlaying(false);
         setIsPaused(false);
@@ -723,7 +720,7 @@ export function useTTS(
   // Jump to specific paragraph index
   const jumpToParagraph = useCallback(
     (paragraphIndex: number, shouldPlay: boolean = true) => {
-      const sentence = sentencesRef.current.find((s) => s.paragraphIndex === paragraphIndex);
+      const sentence = sentencesRef.current.find(s => s.paragraphIndex === paragraphIndex);
       if (sentence) {
         jumpToSentence(sentence.globalIndex, shouldPlay);
       }
@@ -733,13 +730,7 @@ export function useTTS(
 
   // Test / preview sample audio with current settings
   const testVoice = useCallback(
-    async (
-      voiceURI: string,
-      rate: number,
-      pitch: number,
-      volume: number,
-      testText?: string
-    ) => {
+    async (voiceURI: string, rate: number, pitch: number, volume: number, testText?: string) => {
       // Branch: RVC Local
       if (settingsRef.current.ttsProvider === 'rvc-local') {
         const sampleText =
@@ -766,7 +757,7 @@ export function useTTS(
             testAudioRef.current.src = blobUrl;
             testAudioRef.current.playbackRate = Math.max(0.5, Math.min(3.0, rate));
             testAudioRef.current.volume = Math.max(0, Math.min(1.0, volume));
-            testAudioRef.current.play().catch((err) => {
+            testAudioRef.current.play().catch(err => {
               console.warn('testAudio.play() error:', err);
             });
             testAudioRef.current.onended = () => {
@@ -785,15 +776,15 @@ export function useTTS(
       window.speechSynthesis.cancel();
 
       const rawVoices = window.speechSynthesis.getVoices();
-      const voice = rawVoices.find((v) => v.voiceURI === voiceURI);
+      const voice = rawVoices.find(v => v.voiceURI === voiceURI);
 
       const defaultText = voice?.lang.startsWith('vi')
         ? 'Xin chào! Tôi là giọng đọc tiếng Việt của bạn trong ứng dụng VoxRead.'
         : voice?.lang.startsWith('ja')
-        ? 'こんにちは！VoxReadの音声リーダーへようこそ。'
-        : voice?.lang.startsWith('fr')
-        ? 'Bonjour! Bienvenue dans votre lecteur de texte VoxRead.'
-        : 'Hello! This is a test of the speech voice in VoxRead.';
+          ? 'こんにちは！VoxReadの音声リーダーへようこそ。'
+          : voice?.lang.startsWith('fr')
+            ? 'Bonjour! Bienvenue dans votre lecteur de texte VoxRead.'
+            : 'Hello! This is a test of the speech voice in VoxRead.';
 
       const utterance = new SpeechSynthesisUtterance(testText || defaultText);
       utterance.rate = rate;
@@ -811,7 +802,7 @@ export function useTTS(
 
   // Update & persist settings
   const updateSettings = useCallback((newSettings: Partial<TTSSettings>) => {
-    setSettings((prev) => {
+    setSettings(prev => {
       const updated = { ...prev, ...newSettings };
       try {
         localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(updated));

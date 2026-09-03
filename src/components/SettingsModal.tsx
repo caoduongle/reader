@@ -94,7 +94,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       setInternalRVCStatus(ok ? 'connected' : 'unreachable');
     } else {
       try {
-        const cleanUrl = (localSettings.rvcServerUrl || 'http://localhost:8008').replace(/\/+$/, '');
+        const cleanUrl = (localSettings.rvcServerUrl || 'http://localhost:8008').replace(
+          /\/+$/,
+          ''
+        );
         const res = await fetch(`${cleanUrl}/health`);
         const data = await res.json();
         setInternalRVCStatus(data.ok ? 'connected' : 'unreachable');
@@ -109,7 +112,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const languageCategories = useMemo(() => {
     const langMap = new Map<string, { code: string; label: string; count: number }>();
 
-    voices.forEach((v) => {
+    voices.forEach(v => {
       const code = v.lang.substring(0, 2).toLowerCase();
       let label = code.toUpperCase();
       if (code === 'vi') label = 'Vietnamese (Tiếng Việt)';
@@ -143,7 +146,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   // Filtered voice list
   const filteredVoices = useMemo(() => {
-    return voices.filter((v) => {
+    return voices.filter(v => {
       const matchesSearch =
         v.name.toLowerCase().includes(voiceSearch.toLowerCase()) ||
         v.lang.toLowerCase().includes(voiceSearch.toLowerCase());
@@ -261,7 +264,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <Gauge className="w-4 h-4 text-amber-500" />
                     <div>
                       <span className="text-sm font-bold text-white">Reading Speed (TTS Rate)</span>
-                      <span className="text-xs text-slate-400 ml-2">Choose preset or fine-tune</span>
+                      <span className="text-xs text-slate-400 ml-2">
+                        Choose preset or fine-tune
+                      </span>
                     </div>
                   </div>
 
@@ -271,23 +276,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <select
                       id="tts-speed-preset-dropdown"
                       value={
-                        PREDEFINED_SPEEDS.some((p) => Math.abs(p.value - localSettings.rate) < 0.01)
+                        PREDEFINED_SPEEDS.some(p => Math.abs(p.value - localSettings.rate) < 0.01)
                           ? localSettings.rate.toString()
                           : 'custom'
                       }
-                      onChange={(e) => {
+                      onChange={e => {
                         if (e.target.value !== 'custom') {
                           setLocalSettings({ ...localSettings, rate: parseFloat(e.target.value) });
                         }
                       }}
                       className="px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-xs font-mono text-amber-400 font-bold focus:outline-none focus:border-amber-500"
                     >
-                      {PREDEFINED_SPEEDS.map((sp) => (
+                      {PREDEFINED_SPEEDS.map(sp => (
                         <option key={sp.value} value={sp.value} className="bg-[#16161A] text-white">
                           {sp.label} ({sp.desc})
                         </option>
                       ))}
-                      {!PREDEFINED_SPEEDS.some((p) => Math.abs(p.value - localSettings.rate) < 0.01) && (
+                      {!PREDEFINED_SPEEDS.some(
+                        p => Math.abs(p.value - localSettings.rate) < 0.01
+                      ) && (
                         <option value="custom" className="bg-[#16161A] text-amber-400">
                           Custom ({localSettings.rate}x)
                         </option>
@@ -302,7 +309,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     Selectable Speed Radios:
                   </div>
                   <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-9 gap-1.5">
-                    {PREDEFINED_SPEEDS.map((speedOption) => {
+                    {PREDEFINED_SPEEDS.map(speedOption => {
                       const isSelected = Math.abs(localSettings.rate - speedOption.value) < 0.01;
                       return (
                         <button
@@ -347,7 +354,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     max={3.0}
                     step={0.05}
                     value={localSettings.rate}
-                    onChange={(e) =>
+                    onChange={e =>
                       setLocalSettings({ ...localSettings, rate: parseFloat(e.target.value) })
                     }
                     className="w-full accent-amber-500 cursor-pointer h-1.5 bg-white/20 rounded-lg"
@@ -367,7 +374,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <div className="flex items-center space-x-2">
                     <Volume2 className="w-4 h-4 text-amber-500" />
                     <div>
-                      <span className="text-sm font-bold text-white">Nguồn giọng đọc (TTS Provider)</span>
+                      <span className="text-sm font-bold text-white">
+                        Nguồn giọng đọc (TTS Provider)
+                      </span>
                       <span className="text-xs text-slate-400 ml-2">Chọn engine phát âm thanh</span>
                     </div>
                   </div>
@@ -379,16 +388,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           internalRVCStatus === 'connected'
                             ? 'bg-emerald-500 ring-2 ring-emerald-500/30'
                             : internalRVCStatus === 'checking'
-                            ? 'bg-amber-500 animate-pulse'
-                            : 'bg-rose-500 ring-2 ring-rose-500/30'
+                              ? 'bg-amber-500 animate-pulse'
+                              : 'bg-rose-500 ring-2 ring-rose-500/30'
                         }`}
                       />
                       <span className="text-xs font-mono text-slate-300">
                         {internalRVCStatus === 'connected'
                           ? 'Đã kết nối'
                           : internalRVCStatus === 'checking'
-                          ? 'Đang kiểm tra...'
-                          : 'Chưa kết nối'}
+                            ? 'Đang kiểm tra...'
+                            : 'Chưa kết nối'}
                       </span>
                     </div>
                   )}
@@ -407,9 +416,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   >
                     <div>
                       <div className="text-xs font-semibold text-white">Giọng máy (mặc định)</div>
-                      <div className="text-[10px] text-slate-400">Giọng Web Speech của trình duyệt/hệ thống</div>
+                      <div className="text-[10px] text-slate-400">
+                        Giọng Web Speech của trình duyệt/hệ thống
+                      </div>
                     </div>
-                    {localSettings.ttsProvider === 'browser' && <Check className="w-4 h-4 text-amber-400" />}
+                    {localSettings.ttsProvider === 'browser' && (
+                      <Check className="w-4 h-4 text-amber-400" />
+                    )}
                   </button>
 
                   <button
@@ -426,10 +439,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     }`}
                   >
                     <div>
-                      <div className="text-xs font-semibold text-white">Giọng của tôi (RVC local)</div>
-                      <div className="text-[10px] text-slate-400">Voice cloning từ server Python local</div>
+                      <div className="text-xs font-semibold text-white">
+                        Giọng của tôi (RVC local)
+                      </div>
+                      <div className="text-[10px] text-slate-400">
+                        Voice cloning từ server Python local
+                      </div>
                     </div>
-                    {localSettings.ttsProvider === 'rvc-local' && <Check className="w-4 h-4 text-amber-400" />}
+                    {localSettings.ttsProvider === 'rvc-local' && (
+                      <Check className="w-4 h-4 text-amber-400" />
+                    )}
                   </button>
                 </div>
               </div>
@@ -459,7 +478,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         id="rvc-server-url-input"
                         type="text"
                         value={localSettings.rvcServerUrl}
-                        onChange={(e) =>
+                        onChange={e =>
                           setLocalSettings({ ...localSettings, rvcServerUrl: e.target.value })
                         }
                         placeholder="http://localhost:8008"
@@ -472,7 +491,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         className="px-3 py-2 bg-white/10 hover:bg-white/15 text-slate-200 rounded-xl text-xs font-semibold flex items-center space-x-1.5 border border-white/10 transition-colors disabled:opacity-50 cursor-pointer"
                         title="Kiểm tra kết nối tới server"
                       >
-                        <RefreshCw className={`w-3.5 h-3.5 ${isCheckingHealth ? 'animate-spin text-amber-400' : ''}`} />
+                        <RefreshCw
+                          className={`w-3.5 h-3.5 ${isCheckingHealth ? 'animate-spin text-amber-400' : ''}`}
+                        />
                         <span>Kiểm tra</span>
                       </button>
                     </div>
@@ -484,7 +505,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <AlertCircle className="w-4 h-4 shrink-0 text-rose-400 mt-0.5" />
                       <div className="space-y-1">
                         <div className="font-semibold text-rose-200">
-                          Không kết nối được server giọng đọc tại {localSettings.rvcServerUrl || 'http://localhost:8008'}
+                          Không kết nối được server giọng đọc tại{' '}
+                          {localSettings.rvcServerUrl || 'http://localhost:8008'}
                         </div>
                         <div className="text-[11px] text-rose-300/80">
                           Server Python có đang chạy không? Hãy kiểm tra hoặc chạy:
@@ -501,7 +523,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   {internalRVCStatus === 'connected' && (
                     <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center space-x-2 text-xs text-emerald-300">
                       <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-                      <span>Server RVC đã sẵn sàng! Giọng đọc cá nhân hóa sẽ được áp dụng tự động khi phát sách.</span>
+                      <span>
+                        Server RVC đã sẵn sàng! Giọng đọc cá nhân hóa sẽ được áp dụng tự động khi
+                        phát sách.
+                      </span>
                     </div>
                   )}
                 </div>
@@ -532,7 +557,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         type="text"
                         placeholder="Search voice name or language (e.g., Natural, Vietnamese, English, Google)..."
                         value={voiceSearch}
-                        onChange={(e) => setVoiceSearch(e.target.value)}
+                        onChange={e => setVoiceSearch(e.target.value)}
                         className="w-full pl-9 pr-3 py-2 bg-white/5 border border-white/10 rounded-xl text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-500"
                       />
                     </div>
@@ -549,7 +574,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       >
                         All ({voices.length})
                       </button>
-                      {languageCategories.map((cat) => (
+                      {languageCategories.map(cat => (
                         <button
                           key={cat.code}
                           onClick={() => setSelectedLangFilter(cat.code)}
@@ -572,12 +597,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         No voices found matching &quot;{voiceSearch}&quot;.
                       </div>
                     ) : (
-                      filteredVoices.map((v) => {
+                      filteredVoices.map(v => {
                         const isSelected = localSettings.voiceURI === v.voiceURI;
                         return (
                           <div
                             key={v.voiceURI || v.name}
-                            onClick={() => setLocalSettings({ ...localSettings, voiceURI: v.voiceURI })}
+                            onClick={() =>
+                              setLocalSettings({ ...localSettings, voiceURI: v.voiceURI })
+                            }
                             className={`p-2.5 rounded-lg flex items-center justify-between cursor-pointer text-xs transition-colors ${
                               isSelected
                                 ? 'bg-white/10 border border-amber-500/60 text-white font-medium'
@@ -604,7 +631,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                             </div>
 
                             <button
-                              onClick={(e) => {
+                              onClick={e => {
                                 e.stopPropagation();
                                 setLocalSettings({ ...localSettings, voiceURI: v.voiceURI });
                                 onTestVoice(
@@ -649,7 +676,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     step={0.1}
                     disabled={localSettings.ttsProvider === 'rvc-local'}
                     value={localSettings.pitch}
-                    onChange={(e) =>
+                    onChange={e =>
                       setLocalSettings({ ...localSettings, pitch: parseFloat(e.target.value) })
                     }
                     className="w-full accent-amber-500 cursor-pointer h-1.5 bg-white/20 rounded-lg disabled:cursor-not-allowed"
@@ -681,7 +708,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     max={1}
                     step={0.05}
                     value={localSettings.volume}
-                    onChange={(e) =>
+                    onChange={e =>
                       setLocalSettings({ ...localSettings, volume: parseFloat(e.target.value) })
                     }
                     className="w-full accent-amber-500 cursor-pointer h-1.5 bg-white/20 rounded-lg"
@@ -703,17 +730,43 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   {(
                     [
-                      { id: 'soft-gold', name: 'Soft Gold Glow', sample: 'bg-amber-300 text-neutral-900' },
-                      { id: 'neon-glow', name: 'Neon Cyber Cyan', sample: 'bg-cyan-300 text-neutral-900' },
-                      { id: 'emerald', name: 'Emerald Forest', sample: 'bg-emerald-300 text-neutral-900' },
-                      { id: 'lilac', name: 'Lilac Dream', sample: 'bg-purple-300 text-neutral-900' },
-                      { id: 'underlined', name: 'Clean Underline', sample: 'underline decoration-amber-400 decoration-2' },
-                      { id: 'amber-box', name: 'Border Accent Box', sample: 'border-l-4 border-amber-500 pl-1' },
+                      {
+                        id: 'soft-gold',
+                        name: 'Soft Gold Glow',
+                        sample: 'bg-amber-300 text-neutral-900',
+                      },
+                      {
+                        id: 'neon-glow',
+                        name: 'Neon Cyber Cyan',
+                        sample: 'bg-cyan-300 text-neutral-900',
+                      },
+                      {
+                        id: 'emerald',
+                        name: 'Emerald Forest',
+                        sample: 'bg-emerald-300 text-neutral-900',
+                      },
+                      {
+                        id: 'lilac',
+                        name: 'Lilac Dream',
+                        sample: 'bg-purple-300 text-neutral-900',
+                      },
+                      {
+                        id: 'underlined',
+                        name: 'Clean Underline',
+                        sample: 'underline decoration-amber-400 decoration-2',
+                      },
+                      {
+                        id: 'amber-box',
+                        name: 'Border Accent Box',
+                        sample: 'border-l-4 border-amber-500 pl-1',
+                      },
                     ] as { id: HighlightStyle; name: string; sample: string }[]
-                  ).map((style) => (
+                  ).map(style => (
                     <button
                       key={style.id}
-                      onClick={() => setLocalSettings({ ...localSettings, highlightStyle: style.id })}
+                      onClick={() =>
+                        setLocalSettings({ ...localSettings, highlightStyle: style.id })
+                      }
                       className={`p-2.5 rounded-xl border text-left text-xs transition-all ${
                         localSettings.highlightStyle === style.id
                           ? 'border-amber-500 bg-white/10 text-white ring-1 ring-amber-500 font-medium'
@@ -721,7 +774,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       }`}
                     >
                       <div className="font-semibold mb-1">{style.name}</div>
-                      <div className={`text-[11px] px-1.5 py-0.5 rounded font-serif ${style.sample}`}>
+                      <div
+                        className={`text-[11px] px-1.5 py-0.5 rounded font-serif ${style.sample}`}
+                      >
                         Sample highlight
                       </div>
                     </button>
@@ -736,9 +791,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="space-y-6">
               {/* Theme Modes */}
               <div className="space-y-2.5">
-                <label className="text-sm font-semibold text-white">Color Palette & Atmosphere</label>
+                <label className="text-sm font-semibold text-white">
+                  Color Palette & Atmosphere
+                </label>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {(Object.keys(THEMES) as ThemeMode[]).map((themeKey) => {
+                  {(Object.keys(THEMES) as ThemeMode[]).map(themeKey => {
                     const t = THEMES[themeKey];
                     const isSelected = localSettings.theme === themeKey;
                     return (
@@ -759,14 +816,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                 themeKey === 'sepia'
                                   ? '#f4ecd8'
                                   : themeKey === 'light'
-                                  ? '#ffffff'
-                                  : themeKey === 'paper'
-                                  ? '#ebe5d8'
-                                  : themeKey === 'forest'
-                                  ? '#14261f'
-                                  : themeKey === 'midnight'
-                                  ? '#0e1424'
-                                  : '#0D0D0F',
+                                    ? '#ffffff'
+                                    : themeKey === 'paper'
+                                      ? '#ebe5d8'
+                                      : themeKey === 'forest'
+                                        ? '#14261f'
+                                        : themeKey === 'midnight'
+                                          ? '#0e1424'
+                                          : '#0D0D0F',
                             }}
                           />
                           <span className="text-xs font-semibold text-white">{t.name}</span>
@@ -775,14 +832,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           {themeKey === 'sepia'
                             ? 'Warm paper & eye relief'
                             : themeKey === 'light'
-                            ? 'High contrast daylight'
-                            : themeKey === 'paper'
-                            ? 'Bookish texture'
-                            : themeKey === 'forest'
-                            ? 'Botanical night'
-                            : themeKey === 'midnight'
-                            ? 'Deep OLED blue'
-                            : 'Sophisticated Dark'}
+                              ? 'High contrast daylight'
+                              : themeKey === 'paper'
+                                ? 'Bookish texture'
+                                : themeKey === 'forest'
+                                  ? 'Botanical night'
+                                  : themeKey === 'midnight'
+                                    ? 'Deep OLED blue'
+                                    : 'Sophisticated Dark'}
                         </span>
                       </button>
                     );
@@ -794,7 +851,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <div className="space-y-2.5 pt-3 border-t border-white/10">
                 <label className="text-sm font-semibold text-white">Typography Pairing</label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  {(Object.keys(FONT_FAMILIES) as FontFamily[]).map((fontKey) => {
+                  {(Object.keys(FONT_FAMILIES) as FontFamily[]).map(fontKey => {
                     const f = FONT_FAMILIES[fontKey];
                     const isSelected = localSettings.fontFamily === fontKey;
                     return (
@@ -822,7 +879,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <div className="bg-[#16161A] p-3.5 rounded-2xl border border-white/10 space-y-2">
                   <div className="flex justify-between items-center text-xs">
                     <span className="font-semibold text-white">Font Size</span>
-                    <span className="font-mono text-amber-400 font-bold">{localSettings.fontSize}px</span>
+                    <span className="font-mono text-amber-400 font-bold">
+                      {localSettings.fontSize}px
+                    </span>
                   </div>
                   <input
                     id="slider-font-size"
@@ -831,7 +890,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     max={32}
                     step={1}
                     value={localSettings.fontSize}
-                    onChange={(e) =>
+                    onChange={e =>
                       setLocalSettings({ ...localSettings, fontSize: parseInt(e.target.value) })
                     }
                     className="w-full accent-amber-500 cursor-pointer h-1.5 bg-white/20 rounded-lg"
@@ -846,7 +905,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <div className="bg-[#16161A] p-3.5 rounded-2xl border border-white/10 space-y-2">
                   <div className="flex justify-between items-center text-xs">
                     <span className="font-semibold text-white">Line Height Spacing</span>
-                    <span className="font-mono text-amber-400 font-bold">{localSettings.lineHeight}</span>
+                    <span className="font-mono text-amber-400 font-bold">
+                      {localSettings.lineHeight}
+                    </span>
                   </div>
                   <input
                     id="slider-line-height"
@@ -855,7 +916,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     max={2.4}
                     step={0.1}
                     value={localSettings.lineHeight}
-                    onChange={(e) =>
+                    onChange={e =>
                       setLocalSettings({ ...localSettings, lineHeight: parseFloat(e.target.value) })
                     }
                     className="w-full accent-amber-500 cursor-pointer h-1.5 bg-white/20 rounded-lg"
@@ -872,7 +933,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <div className="pt-3 border-t border-white/10 space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="text-sm font-semibold text-white">Auto-scroll Active Sentence</div>
+                    <div className="text-sm font-semibold text-white">
+                      Auto-scroll Active Sentence
+                    </div>
                     <div className="text-xs text-slate-400">
                       Smoothly scrolls viewport so reading sentence stays centered
                     </div>
@@ -919,7 +982,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <button
                   id="toggle-mascot-switch"
                   onClick={() =>
-                    setLocalSettings({ ...localSettings, mascotEnabled: !localSettings.mascotEnabled })
+                    setLocalSettings({
+                      ...localSettings,
+                      mascotEnabled: !localSettings.mascotEnabled,
+                    })
                   }
                   className={`w-12 h-6 rounded-full transition-colors relative shrink-0 ${
                     localSettings.mascotEnabled ? 'bg-amber-600' : 'bg-white/10'
@@ -936,7 +1002,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               {/* Mascot Character Design Choice (6 Characters) */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <label className="text-sm font-semibold text-white">Select Character Design (6 Archetypes)</label>
+                  <label className="text-sm font-semibold text-white">
+                    Select Character Design (6 Archetypes)
+                  </label>
                   <span className="text-xs text-slate-400 font-mono">
                     Active: {localSettings.mascotType.toUpperCase()}
                   </span>
@@ -944,14 +1012,44 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                   {(
                     [
-                      { id: 'fox', name: 'Kitsune Fox', emoji: '🦊', desc: 'Curious & energetic novel guide' },
-                      { id: 'owl', name: 'Barnaby Owl', emoji: '🦉', desc: 'Wise reading scholar with spectacles' },
-                      { id: 'bot', name: 'Voxie-9 Bot', emoji: '🤖', desc: 'Cyber droid with audio equalizer face' },
-                      { id: 'cat', name: 'Mochi Neko', emoji: '🐱', desc: 'Cozy kitten for bedtime stories' },
-                      { id: 'bunny', name: 'Luna Bunny', emoji: '🐰', desc: 'Gentle moon rabbit with star talisman' },
-                      { id: 'dragon', name: 'Astral Dragon', emoji: '🐲', desc: 'Mythical baby dragon with ember glow' },
+                      {
+                        id: 'fox',
+                        name: 'Kitsune Fox',
+                        emoji: '🦊',
+                        desc: 'Curious & energetic novel guide',
+                      },
+                      {
+                        id: 'owl',
+                        name: 'Barnaby Owl',
+                        emoji: '🦉',
+                        desc: 'Wise reading scholar with spectacles',
+                      },
+                      {
+                        id: 'bot',
+                        name: 'Voxie-9 Bot',
+                        emoji: '🤖',
+                        desc: 'Cyber droid with audio equalizer face',
+                      },
+                      {
+                        id: 'cat',
+                        name: 'Mochi Neko',
+                        emoji: '🐱',
+                        desc: 'Cozy kitten for bedtime stories',
+                      },
+                      {
+                        id: 'bunny',
+                        name: 'Luna Bunny',
+                        emoji: '🐰',
+                        desc: 'Gentle moon rabbit with star talisman',
+                      },
+                      {
+                        id: 'dragon',
+                        name: 'Astral Dragon',
+                        emoji: '🐲',
+                        desc: 'Mythical baby dragon with ember glow',
+                      },
                     ] as { id: MascotType; name: string; emoji: string; desc: string }[]
-                  ).map((m) => (
+                  ).map(m => (
                     <button
                       key={m.id}
                       type="button"
@@ -988,8 +1086,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 {/* 1. Speech bounce */}
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="text-xs font-medium text-white">Active Speech Bouncing & Talking Recoil</div>
-                    <div className="text-[11px] text-slate-400">Animated mouth motion and rhythmic badge pulse</div>
+                    <div className="text-xs font-medium text-white">
+                      Active Speech Bouncing & Talking Recoil
+                    </div>
+                    <div className="text-[11px] text-slate-400">
+                      Animated mouth motion and rhythmic badge pulse
+                    </div>
                   </div>
                   <button
                     onClick={() =>
@@ -1014,7 +1116,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="text-xs font-medium text-white">Periodic Eye Blinking</div>
-                    <div className="text-[11px] text-slate-400">Natural random eye blinking cycles</div>
+                    <div className="text-[11px] text-slate-400">
+                      Natural random eye blinking cycles
+                    </div>
                   </div>
                   <button
                     onClick={() =>
@@ -1039,7 +1143,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="text-xs font-medium text-white">Idle Floating Sway</div>
-                    <div className="text-[11px] text-slate-400">Gentle vertical hovering bobbing animation</div>
+                    <div className="text-[11px] text-slate-400">
+                      Gentle vertical hovering bobbing animation
+                    </div>
                   </div>
                   <button
                     onClick={() =>
@@ -1064,7 +1170,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="text-xs font-medium text-white">Speech Quote Bubble</div>
-                    <div className="text-[11px] text-slate-400">Show dialog bubble with real-time novel quotes</div>
+                    <div className="text-[11px] text-slate-400">
+                      Show dialog bubble with real-time novel quotes
+                    </div>
                   </div>
                   <button
                     onClick={() =>

@@ -53,7 +53,7 @@ export const BookmarksDrawer: React.FC<BookmarksDrawerProps> = ({
 
   // Filter bookmarks
   const displayedBookmarks = useMemo(() => {
-    return bookmarks.filter((bm) => {
+    return bookmarks.filter(bm => {
       const matchesDoc = filterMode === 'all' || !document || bm.documentId === document.id;
       const matchesQuery =
         !searchQuery ||
@@ -93,7 +93,7 @@ export const BookmarksDrawer: React.FC<BookmarksDrawerProps> = ({
       <div
         id="bookmarks-drawer-content"
         className="w-full max-w-md h-full bg-[#0D0D0F] text-slate-200 shadow-2xl border-l border-white/10 flex flex-col animate-slide-left"
-        onClick={(e) => e.stopPropagation()}
+        onClick={e => e.stopPropagation()}
       >
         {/* Header */}
         <div className="p-4 border-b border-white/10 flex items-center justify-between">
@@ -125,7 +125,11 @@ export const BookmarksDrawer: React.FC<BookmarksDrawerProps> = ({
                   Current Reading Point
                 </div>
                 <div className="text-xs text-slate-300 truncate mt-0.5 font-serif italic">
-                  &quot;{currentSentenceText ? currentSentenceText.substring(0, 55) + '...' : 'Beginning of Section'}&quot;
+                  &quot;
+                  {currentSentenceText
+                    ? currentSentenceText.substring(0, 55) + '...'
+                    : 'Beginning of Section'}
+                  &quot;
                 </div>
               </div>
               <button
@@ -157,7 +161,7 @@ export const BookmarksDrawer: React.FC<BookmarksDrawerProps> = ({
                 autoFocus
                 placeholder="Add an optional note (e.g. Favorite quote, key clue)..."
                 value={newBookmarkNote}
-                onChange={(e) => setNewBookmarkNote(e.target.value)}
+                onChange={e => setNewBookmarkNote(e.target.value)}
                 className="w-full px-3 py-1.5 bg-white/5 border border-white/10 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
               />
               <div className="flex justify-end space-x-2">
@@ -187,7 +191,7 @@ export const BookmarksDrawer: React.FC<BookmarksDrawerProps> = ({
               type="text"
               placeholder="Search in bookmarked text or notes..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={e => setSearchQuery(e.target.value)}
               className="w-full pl-8 pr-3 py-1.5 bg-white/5 border border-white/10 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
             />
           </div>
@@ -202,7 +206,8 @@ export const BookmarksDrawer: React.FC<BookmarksDrawerProps> = ({
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
-                Current Book ({bookmarks.filter((b) => !document || b.documentId === document.id).length})
+                Current Book (
+                {bookmarks.filter(b => !document || b.documentId === document.id).length})
               </button>
               <button
                 onClick={() => setFilterMode('all')}
@@ -240,7 +245,8 @@ export const BookmarksDrawer: React.FC<BookmarksDrawerProps> = ({
                 {searchQuery ? 'No bookmarks match your query' : 'No Bookmarks Saved Yet'}
               </div>
               <p className="text-xs text-slate-500 max-w-xs mx-auto">
-                Click &quot;Bookmark&quot; or tap the bookmark pin next to any sentence while reading to save meaningful quotes and reading checkpoints.
+                Click &quot;Bookmark&quot; or tap the bookmark pin next to any sentence while
+                reading to save meaningful quotes and reading checkpoints.
               </p>
               {!searchQuery && (
                 <button
@@ -253,7 +259,7 @@ export const BookmarksDrawer: React.FC<BookmarksDrawerProps> = ({
               )}
             </div>
           ) : (
-            displayedBookmarks.map((bm) => {
+            displayedBookmarks.map(bm => {
               const isEditing = editingId === bm.id;
               const dateStr = new Date(bm.createdAt).toLocaleDateString(undefined, {
                 month: 'short',
@@ -294,7 +300,7 @@ export const BookmarksDrawer: React.FC<BookmarksDrawerProps> = ({
                         type="text"
                         autoFocus
                         value={editNoteText}
-                        onChange={(e) => setEditNoteText(e.target.value)}
+                        onChange={e => setEditNoteText(e.target.value)}
                         placeholder="Edit note..."
                         className="flex-1 px-2.5 py-1 bg-white/10 border border-white/20 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
                       />

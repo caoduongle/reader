@@ -96,7 +96,13 @@ Elena placed her fingers against the glass panel overlooking the glowing crescen
 "Estimated arrival time?" Elena asked, her voice steady despite the rapid pounding in her chest.
 "Seventy-two hours," Marcus whispered. "And whoever they are, they are singing directly to us."`;
 
-function createDocument(id: string, title: string, author: string, rawText: string, format: 'sample' = 'sample'): DocumentItem {
+function createDocument(
+  id: string,
+  title: string,
+  author: string,
+  rawText: string,
+  format: 'sample' = 'sample'
+): DocumentItem {
   const chapters = parseNovelText(rawText, title);
   const totalWords = chapters.reduce((acc, c) => acc + c.wordCount, 0);
   const totalSentences = chapters.reduce((acc, c) => acc + c.totalSentences, 0);
@@ -112,10 +118,10 @@ function createDocument(id: string, title: string, author: string, rawText: stri
       chapterIndex: 0,
       sentenceIndex: 0,
       progressPercentage: 0,
-      updatedAt: Date.now()
+      updatedAt: Date.now(),
     },
     totalWords,
-    totalSentences
+    totalSentences,
   };
 }
 
@@ -132,16 +138,11 @@ export const SAMPLE_DOCUMENTS: DocumentItem[] = [
     'Truyện Cổ Tích Dân Gian Việt Nam',
     VIETNAMESE_TALE
   ),
-  createDocument(
-    'sample-alice',
-    "Alice's Adventures in Wonderland",
-    'Lewis Carroll',
-    ALICE_TEXT
-  ),
+  createDocument('sample-alice', "Alice's Adventures in Wonderland", 'Lewis Carroll', ALICE_TEXT),
   createDocument(
     'sample-scifi',
     'The Signal from Epsilon: First Contact',
     'Sci-Fi Archive',
     SCIFI_TEXT
-  )
+  ),
 ];

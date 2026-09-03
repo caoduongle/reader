@@ -27,11 +27,7 @@ interface UploadModalProps {
   onDocumentLoaded: (doc: DocumentItem) => void;
 }
 
-export const UploadModal: React.FC<UploadModalProps> = ({
-  isOpen,
-  onClose,
-  onDocumentLoaded,
-}) => {
+export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onDocumentLoaded }) => {
   const [activeTab, setActiveTab] = useState<'upload' | 'paste' | 'samples'>('upload');
   const [isDragging, setIsDragging] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -70,12 +66,12 @@ export const UploadModal: React.FC<UploadModalProps> = ({
 
       if (ext === 'pdf') {
         format = 'pdf';
-        const res = await parsePdfFile(file, (p) => setProgress(p), signal);
+        const res = await parsePdfFile(file, p => setProgress(p), signal);
         chapters = res.chapters;
         docTitle = res.title;
       } else if (ext === 'epub') {
         format = 'epub';
-        const res = await parseEpubFile(file, (p) => setProgress(p), signal);
+        const res = await parseEpubFile(file, p => setProgress(p), signal);
         chapters = res.chapters;
         docTitle = res.title;
         docAuthor = res.author;
@@ -197,7 +193,9 @@ export const UploadModal: React.FC<UploadModalProps> = ({
             </div>
             <div>
               <h2 className="text-lg font-bold text-neutral-100">Add Novel or Document</h2>
-              <p className="text-xs text-neutral-400">Upload files (.txt, .pdf, .epub) or paste text directly</p>
+              <p className="text-xs text-neutral-400">
+                Upload files (.txt, .pdf, .epub) or paste text directly
+              </p>
             </div>
           </div>
           <button
@@ -260,7 +258,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
           {activeTab === 'upload' && (
             <div className="space-y-4">
               <div
-                onDragOver={(e) => {
+                onDragOver={e => {
                   e.preventDefault();
                   setIsDragging(true);
                 }}
@@ -277,7 +275,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                   ref={fileInputRef}
                   type="file"
                   accept=".txt,.pdf,.epub,.md,.text"
-                  onChange={(e) => {
+                  onChange={e => {
                     if (e.target.files && e.target.files.length > 0) {
                       handleProcessFile(e.target.files[0]);
                     }
@@ -288,7 +286,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                 {isLoading ? (
                   <div
                     className="flex flex-col items-center space-y-3 py-4"
-                    onClick={(e) => e.stopPropagation()}
+                    onClick={e => e.stopPropagation()}
                   >
                     <Loader2 className="w-10 h-10 text-amber-500 animate-spin" />
                     <div className="text-sm font-semibold text-neutral-200">
@@ -302,7 +300,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                     </div>
                     <button
                       type="button"
-                      onClick={(e) => {
+                      onClick={e => {
                         e.stopPropagation();
                         abortControllerRef.current?.abort();
                         setIsLoading(false);
@@ -327,7 +325,8 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                         Supports <span className="text-amber-400 font-mono">.txt</span>,{' '}
                         <span className="text-amber-400 font-mono">.pdf</span>,{' '}
                         <span className="text-amber-400 font-mono">.epub</span>,{' '}
-                        <span className="text-amber-400 font-mono">.md</span> (Tối đa {MAX_FILE_SIZE_MB}MB)
+                        <span className="text-amber-400 font-mono">.md</span> (Tối đa{' '}
+                        {MAX_FILE_SIZE_MB}MB)
                       </p>
                     </div>
                     <div className="inline-block px-3 py-1.5 rounded-lg bg-neutral-800 border border-neutral-700 text-xs text-neutral-300 font-medium">
@@ -367,7 +366,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                     type="text"
                     placeholder="e.g. My Web Novel - Chapter 1"
                     value={pastedTitle}
-                    onChange={(e) => setPastedTitle(e.target.value)}
+                    onChange={e => setPastedTitle(e.target.value)}
                     className="w-full px-3 py-2 bg-neutral-800/80 border border-neutral-700 rounded-xl text-xs text-neutral-100 placeholder-neutral-500 focus:outline-none focus:border-amber-500"
                   />
                 </div>
@@ -379,7 +378,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                     type="text"
                     placeholder="e.g. Nam Cao / Arthur Conan Doyle"
                     value={pastedAuthor}
-                    onChange={(e) => setPastedAuthor(e.target.value)}
+                    onChange={e => setPastedAuthor(e.target.value)}
                     className="w-full px-3 py-2 bg-neutral-800/80 border border-neutral-700 rounded-xl text-xs text-neutral-100 placeholder-neutral-500 focus:outline-none focus:border-amber-500"
                   />
                 </div>
@@ -391,14 +390,15 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                     Novel / Article Text Content
                   </label>
                   <span className="text-[11px] font-mono text-neutral-400">
-                    {pastedContent.split(/\s+/).filter(Boolean).length} words | {pastedContent.length} chars
+                    {pastedContent.split(/\s+/).filter(Boolean).length} words |{' '}
+                    {pastedContent.length} chars
                   </span>
                 </div>
                 <textarea
                   rows={8}
                   placeholder="Paste your text or chapters here... You can use 'Chapter 1', 'Chương 1', or headings to automatically divide into navigable chapters!"
                   value={pastedContent}
-                  onChange={(e) => setPastedContent(e.target.value)}
+                  onChange={e => setPastedContent(e.target.value)}
                   className="w-full p-3.5 bg-neutral-950/70 border border-neutral-700 rounded-xl text-xs text-neutral-200 font-serif leading-relaxed placeholder-neutral-600 focus:outline-none focus:border-amber-500"
                 />
               </div>
@@ -421,10 +421,11 @@ export const UploadModal: React.FC<UploadModalProps> = ({
           {activeTab === 'samples' && (
             <div className="space-y-3">
               <p className="text-xs text-neutral-400">
-                Choose a preloaded classic book or Vietnamese story to test TTS audio synthesis immediately:
+                Choose a preloaded classic book or Vietnamese story to test TTS audio synthesis
+                immediately:
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {SAMPLE_DOCUMENTS.map((doc) => (
+                {SAMPLE_DOCUMENTS.map(doc => (
                   <div
                     key={doc.id}
                     onClick={() => {

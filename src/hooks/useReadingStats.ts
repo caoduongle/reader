@@ -78,12 +78,17 @@ export function useReadingStats(
   // Track words as sentences advance
   const lastProcessedSentenceRef = useRef<string>('');
   useEffect(() => {
-    if (isPlaying && !isPaused && currentSentenceText && currentSentenceText !== lastProcessedSentenceRef.current) {
+    if (
+      isPlaying &&
+      !isPaused &&
+      currentSentenceText &&
+      currentSentenceText !== lastProcessedSentenceRef.current
+    ) {
       lastProcessedSentenceRef.current = currentSentenceText;
       const wordsInSentence = currentSentenceText.trim().split(/\s+/).filter(Boolean).length;
       if (wordsInSentence > 0) {
         wordsAccumulatorRef.current += wordsInSentence;
-        setSessionWordsRead((prev) => prev + wordsInSentence);
+        setSessionWordsRead(prev => prev + wordsInSentence);
       }
     }
   }, [isPlaying, isPaused, currentSentenceText]);
@@ -94,11 +99,11 @@ export function useReadingStats(
 
     if (isPlaying && !isPaused) {
       interval = window.setInterval(() => {
-        setSessionSeconds((prev) => prev + 1);
+        setSessionSeconds(prev => prev + 1);
 
         // Every 15 seconds, flush increment into persistent daily map
         const todayKey = getLocalDateKey(new Date());
-        setDailyDataMap((prevMap) => {
+        setDailyDataMap(prevMap => {
           const currentToday = prevMap[todayKey] || {
             durationMinutes: 0,
             wordsRead: 0,
@@ -156,7 +161,7 @@ export function useReadingStats(
           wpm: Math.min(600, Math.max(80, wpm)),
         };
 
-        setRecentSessions((prev) => {
+        setRecentSessions(prev => {
           const updated = [newRecord, ...prev.slice(0, 19)];
           try {
             localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(updated));
@@ -168,7 +173,15 @@ export function useReadingStats(
       }
     }
     prevIsPlayingRef.current = isPlaying;
-  }, [isPlaying, isPaused, sessionSeconds, sessionWordsRead, documentTitle, chapterTitle, speechRate]);
+  }, [
+    isPlaying,
+    isPaused,
+    sessionSeconds,
+    sessionWordsRead,
+    documentTitle,
+    chapterTitle,
+    speechRate,
+  ]);
 
   // Compute 7-day stats and summary metrics
   const summary: ReadingStatsSummary = useCallback(() => {
@@ -178,8 +191,12 @@ export function useReadingStats(
     let totalWeightedWpm = 0;
     let daysWithReading = 0;
 
-    const dailyStats: DailyReadingStat[] = daysMeta.map((meta) => {
-      const entry = dailyDataMap[meta.date] || { durationMinutes: 0, wordsRead: 0, sessionsCount: 0 };
+    const dailyStats: DailyReadingStat[] = daysMeta.map(meta => {
+      const entry = dailyDataMap[meta.date] || {
+        durationMinutes: 0,
+        wordsRead: 0,
+        sessionsCount: 0,
+      };
       const duration = Math.round(entry.durationMinutes);
       const words = entry.wordsRead;
       const wpm = duration > 0 ? Math.round(words / duration) : 0;
@@ -203,7 +220,11 @@ export function useReadingStats(
     });
 
     const todayKey = getLocalDateKey(new Date());
-    const todayEntry = dailyDataMap[todayKey] || { durationMinutes: 0, wordsRead: 0, sessionsCount: 0 };
+    const todayEntry = dailyDataMap[todayKey] || {
+      durationMinutes: 0,
+      wordsRead: 0,
+      sessionsCount: 0,
+    };
     const overallAvgWpm = totalTimeMin > 0 ? Math.round(totalWords / totalTimeMin) : 220;
 
     // Calculate current streak
@@ -225,7 +246,8 @@ export function useReadingStats(
       Math.round(todayEntry.durationMinutes || 0)
     );
 
-    const activeSessionsCount = recentSessions.length + (todayEntry.sessionsCount > 0 ? todayEntry.sessionsCount : 0);
+    const activeSessionsCount =
+      recentSessions.length + (todayEntry.sessionsCount > 0 ? todayEntry.sessionsCount : 0);
 
     return {
       totalReadingTimeMinutes: totalTimeMin,

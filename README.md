@@ -35,18 +35,18 @@ flowchart TD
 
 ## 📁 Cấu trúc thư mục dự án
 
-| Thư mục | Vai trò & Trách nhiệm (1 dòng) |
-|---|---|
-| `src/` | Toàn bộ mã nguồn giao diện người dùng React 19, các components, hooks đọc sách, audio và tiện ích lưu trữ. |
-| `electron/` | Mã nguồn tiến trình chính (Main process) và Preload script quản lý cửa sổ desktop và tiến trình Python backend. |
-| `python-backend/` | Microservice Python Flask chạy Edge-TTS và RVC local để nhân bản giọng đọc và suy luận âm thanh. |
-| `public/` | Tài nguyên tĩnh công khai (icon, logo, mẫu truyện) phục vụ ứng dụng web và desktop. |
-| `specs/` | Hồ sơ đặc tả kỹ thuật, kế hoạch triển khai (Spec-Kit) và checklist chất lượng kiểm thử của từng phiên bản. |
-| `docs/` | Tài liệu hướng dẫn chuyên sâu chi tiết (hướng dẫn huấn luyện giọng RVC, quy chuẩn kiến trúc). |
-| `model/` | Thư mục quy ước chứa trọng số mô hình RVC đã huấn luyện (`.pth` và `.index`). |
-| `dist/` | Sản phẩm đóng gói web production sau khi tối ưu hóa dung lượng (bundle code-splitting). |
-| `dist-electron/` | Sản phẩm biên dịch tiến trình Electron main và preload (`.cjs`). |
-| `release/` | Bộ cài đặt ứng dụng Windows desktop (`.exe` NSIS và bản portable). |
+| Thư mục           | Vai trò & Trách nhiệm (1 dòng)                                                                                  |
+| ----------------- | --------------------------------------------------------------------------------------------------------------- |
+| `src/`            | Toàn bộ mã nguồn giao diện người dùng React 19, các components, hooks đọc sách, audio và tiện ích lưu trữ.      |
+| `electron/`       | Mã nguồn tiến trình chính (Main process) và Preload script quản lý cửa sổ desktop và tiến trình Python backend. |
+| `python-backend/` | Microservice Python Flask chạy Edge-TTS và RVC local để nhân bản giọng đọc và suy luận âm thanh.                |
+| `public/`         | Tài nguyên tĩnh công khai (icon, logo, mẫu truyện) phục vụ ứng dụng web và desktop.                             |
+| `specs/`          | Hồ sơ đặc tả kỹ thuật, kế hoạch triển khai (Spec-Kit) và checklist chất lượng kiểm thử của từng phiên bản.      |
+| `docs/`           | Tài liệu hướng dẫn chuyên sâu chi tiết (hướng dẫn huấn luyện giọng RVC, quy chuẩn kiến trúc).                   |
+| `model/`          | Thư mục quy ước chứa trọng số mô hình RVC đã huấn luyện (`.pth` và `.index`).                                   |
+| `dist/`           | Sản phẩm đóng gói web production sau khi tối ưu hóa dung lượng (bundle code-splitting).                         |
+| `dist-electron/`  | Sản phẩm biên dịch tiến trình Electron main và preload (`.cjs`).                                                |
+| `release/`        | Bộ cài đặt ứng dụng Windows desktop (`.exe` NSIS và bản portable).                                              |
 
 ---
 
@@ -57,10 +57,12 @@ flowchart TD
 Dự án cung cấp sẵn script tự động kiểm tra phiên bản Node.js & Python, cài đặt dependencies JavaScript (`npm install`), và cấu hình môi trường ảo Python virtualenv cho backend:
 
 - **Trên Windows (PowerShell)**:
+
   ```powershell
   powershell -ExecutionPolicy Bypass -File scripts/setup.ps1
   ```
-  *(Hoặc chạy `.\scripts\setup.ps1` nếu bạn đã mở sẵn terminal PowerShell)*.
+
+  _(Hoặc chạy `.\scripts\setup.ps1` nếu bạn đã mở sẵn terminal PowerShell)_.
 
 - **Trên macOS / Linux (Bash)**:
   ```bash
@@ -115,10 +117,12 @@ Dành cho người muốn đọc sách bằng chính giọng AI của bản thâ
 Trong quá trình phát triển dự án, mã nguồn có sự chuyển dịch kiến trúc quan trọng giữa các phiên bản backend:
 
 ### 1. `python-backend/server.py` vs `server.py` (root cũ)
+
 - **Bản chất**: Cùng một mã nguồn 100%. Cả hai đều viết bằng **Flask**, sử dụng pipeline `Edge-TTS` + `rvc-python`, lắng nghe tại cổng `8008`.
 - **Nguyên nhân**: Ban đầu `server.py` đặt ở thư mục gốc phục vụ cho Chrome extension. Khi dự án phát triển bản Desktop Electron, file được copy vào `python-backend/server.py` để tiện quản lý tiến trình và đóng gói vào installer (`electron/main.ts` dòng 56 và `package.json` dòng 29 trỏ trực tiếp tới `python-backend/server.py`). Bản ở gốc repo là bản trùng lặp thừa và đã được dọn dẹp.
 
 ### 2. `local-voice-server/` vs `python-backend/server.py`
+
 - **Bản chất**: **Hai server hoàn toàn khác nhau về công nghệ và mô hình AI**, nhưng dùng chung một giao thức gọi `POST http://localhost:8008/speak`:
   - `local-voice-server/server.py`: Viết bằng **FastAPI + Uvicorn**, dùng mô hình **viXTTS (XTTS-v2)** để clone giọng zero-shot trực tiếp từ một đoạn ghi âm `voice_sample.wav` 10–30s (không cần huấn luyện model riêng).
   - `python-backend/server.py`: Viết bằng **Flask**, dùng **Edge-TTS + RVC** (`rvc-python`). Tạo giọng nền tiếng Việt chuẩn tốc độ cao qua Edge-TTS rồi dùng RVC biến đổi âm sắc theo checkpoint `.pth`.

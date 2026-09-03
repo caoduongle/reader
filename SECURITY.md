@@ -7,10 +7,12 @@ Tài liệu này quy định các tiêu chuẩn an toàn, chính sách bảo m�
 ## 1. Chính Sách Lắng Nghe Dịch Vụ Cục Bộ (Localhost Binding Policy)
 
 Ứng dụng VoxRead tích hợp các microservices cục bộ chạy trên máy tính người dùng:
+
 - **Server RVC TTS local** (`python-backend/server.py` — cổng mặc định `8008`).
 - **Server Proxy Gemini API** (`server.js` — cổng mặc định `3001`).
 
 ### ⚠️ Cảnh báo an toàn mạng:
+
 1. **Chỉ lắng nghe trên Loopback (`127.0.0.1`)**:
    - Tất cả các server backend cục bộ **bắt buộc phải bind vào `127.0.0.1` (hoặc `localhost`)**.
    - **Tuyệt đối KHÔNG bind vào `0.0.0.0`**. Việc lắng nghe trên `0.0.0.0` sẽ phơi bày các cổng dịch vụ nội bộ ra toàn bộ mạng cục bộ (LAN, Wi-Fi công cộng) hoặc mạng Internet, tạo nguy cơ bị thiết bị khác gửi request độc hại hoặc truy cập tài nguyên máy tính của bạn.
@@ -24,6 +26,7 @@ Tài liệu này quy định các tiêu chuẩn an toàn, chính sách bảo m�
 Dự án có thể tương tác với Google Gemini AI thông qua API Key. Để đảm bảo an toàn tuyệt đối cho tài khoản và hạn mức sử dụng:
 
 ### Nguyên tắc bảo vệ khóa:
+
 1. **Không bao giờ hardcode khóa**:
    - Tuyệt đối không dán trực tiếp giá trị API key vào mã nguồn giao diện (`src/`), mã Electron (`electron/`), hay bất kỳ file nào được theo dõi bởi Git.
 2. **Không dùng tiền tố `VITE_` cho các bí mật**:
@@ -34,7 +37,9 @@ Dự án có thể tương tác với Google Gemini AI thông qua API Key. Để
    - Tệp `.gitignore` của dự án đã được thiết lập để tự động bỏ qua mọi tệp `.env*` (trừ `.env.example`). Luôn kiểm tra `git status` trước khi commit để đảm bảo không đẩy nhầm file chứa thông tin nhạy cảm.
 
 ### Quy trình thu hồi và xoay vòng khóa (Revocation & Rotation):
+
 Nếu bạn nghi ngờ `GEMINI_API_KEY` đã bị rò rỉ:
+
 1. Truy cập ngay vào **[Google AI Studio API Keys](https://aistudio.google.com/apikey)**.
 2. Tìm khóa đang nghi ngờ bị lộ và bấm biểu tượng **Delete** (Thùng rác) để vô hiệu hóa khóa ngay lập tức.
 3. Tạo khóa mới bằng nút **Create API key**.

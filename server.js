@@ -41,7 +41,8 @@ app.post('/api/generate', async (req, res) => {
   if (!rawKey || rawKey.trim() === '' || rawKey === 'MY_GEMINI_API_KEY') {
     return res.status(503).json({
       ok: false,
-      error: 'GEMINI_API_KEY is not configured on server. Please add a valid key to your local .env file.',
+      error:
+        'GEMINI_API_KEY is not configured on server. Please add a valid key to your local .env file.',
     });
   }
 

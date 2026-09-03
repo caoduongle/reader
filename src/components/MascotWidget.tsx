@@ -51,10 +51,13 @@ export const MascotWidget: React.FC<MascotWidgetProps> = ({
       setIsBlinking(false);
       return;
     }
-    const blinkInterval = setInterval(() => {
-      setIsBlinking(true);
-      setTimeout(() => setIsBlinking(false), 180);
-    }, 3800 + Math.random() * 2200);
+    const blinkInterval = setInterval(
+      () => {
+        setIsBlinking(true);
+        setTimeout(() => setIsBlinking(false), 180);
+      },
+      3800 + Math.random() * 2200
+    );
     return () => clearInterval(blinkInterval);
   }, [settings.mascotBlinkAnimation]);
 
@@ -62,7 +65,7 @@ export const MascotWidget: React.FC<MascotWidgetProps> = ({
   useEffect(() => {
     if (isPlaying && !isPaused && settings.mascotBounceAnimation) {
       const talkInterval = setInterval(() => {
-        setMouthOpen((prev) => !prev);
+        setMouthOpen(prev => !prev);
       }, 160);
       return () => clearInterval(talkInterval);
     } else {
@@ -176,7 +179,9 @@ export const MascotWidget: React.FC<MascotWidgetProps> = ({
             {/* Reading progress indicator inside bubble */}
             {totalSentences > 0 && (
               <div className="mt-2.5 pt-2 border-t border-white/10 flex items-center justify-between text-[11px] text-slate-400 font-sans">
-                <span>Sentence {Math.min(currentSentenceIndex + 1, totalSentences)} of {totalSentences}</span>
+                <span>
+                  Sentence {Math.min(currentSentenceIndex + 1, totalSentences)} of {totalSentences}
+                </span>
                 <span className="font-mono text-amber-400 font-semibold">
                   {Math.round(((currentSentenceIndex + 1) / Math.max(1, totalSentences)) * 100)}%
                 </span>
@@ -191,11 +196,7 @@ export const MascotWidget: React.FC<MascotWidgetProps> = ({
 
       {/* Mascot Character Avatar */}
       <motion.div
-        animate={
-          settings.mascotFloatingAnimation
-            ? { y: [0, -4, 0] }
-            : { y: 0 }
-        }
+        animate={settings.mascotFloatingAnimation ? { y: [0, -4, 0] } : { y: 0 }}
         transition={{
           duration: 3,
           repeat: Infinity,
@@ -225,8 +226,8 @@ export const MascotWidget: React.FC<MascotWidgetProps> = ({
             isPlaying && !isPaused
               ? 'bg-[#1E1E24] border-2 border-amber-500 shadow-[0_0_30px_rgba(245,158,11,0.3)] ring-2 ring-amber-500/30'
               : isPaused
-              ? 'bg-[#16161A] border border-white/20 shadow-xl'
-              : 'bg-[#16161A] border border-white/10 hover:border-amber-500/60 shadow-xl'
+                ? 'bg-[#16161A] border border-white/20 shadow-xl'
+                : 'bg-[#16161A] border border-white/10 hover:border-amber-500/60 shadow-xl'
           }`}
         >
           {/* 1. FOX MASCOT */}
@@ -246,8 +247,24 @@ export const MascotWidget: React.FC<MascotWidgetProps> = ({
               {/* Eyes */}
               {isBlinking ? (
                 <>
-                  <line x1="33" y1="46" x2="43" y2="46" stroke="#431407" strokeWidth="3" strokeLinecap="round" />
-                  <line x1="57" y1="46" x2="67" y2="46" stroke="#431407" strokeWidth="3" strokeLinecap="round" />
+                  <line
+                    x1="33"
+                    y1="46"
+                    x2="43"
+                    y2="46"
+                    stroke="#431407"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                  />
+                  <line
+                    x1="57"
+                    y1="46"
+                    x2="67"
+                    y2="46"
+                    stroke="#431407"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                  />
                 </>
               ) : (
                 <>
@@ -265,12 +282,34 @@ export const MascotWidget: React.FC<MascotWidgetProps> = ({
               {mouthOpen ? (
                 <ellipse cx="50" cy="65" rx="4.5" ry="4" fill="#881337" />
               ) : (
-                <path d="M 46 62 Q 50 66 54 62" stroke="#431407" strokeWidth="2" fill="none" strokeLinecap="round" />
+                <path
+                  d="M 46 62 Q 50 66 54 62"
+                  stroke="#431407"
+                  strokeWidth="2"
+                  fill="none"
+                  strokeLinecap="round"
+                />
               )}
 
               {/* Reading Spectacles */}
-              <circle cx="38" cy="46" r="8" fill="none" stroke="#d97706" strokeWidth="1.5" opacity="0.85" />
-              <circle cx="62" cy="46" r="8" fill="none" stroke="#d97706" strokeWidth="1.5" opacity="0.85" />
+              <circle
+                cx="38"
+                cy="46"
+                r="8"
+                fill="none"
+                stroke="#d97706"
+                strokeWidth="1.5"
+                opacity="0.85"
+              />
+              <circle
+                cx="62"
+                cy="46"
+                r="8"
+                fill="none"
+                stroke="#d97706"
+                strokeWidth="1.5"
+                opacity="0.85"
+              />
               <line x1="46" y1="46" x2="54" y2="46" stroke="#d97706" strokeWidth="1.5" />
             </svg>
           )}
@@ -291,8 +330,24 @@ export const MascotWidget: React.FC<MascotWidgetProps> = ({
               {/* Big Eyes */}
               {isBlinking ? (
                 <>
-                  <line x1="30" y1="46" x2="44" y2="46" stroke="#451a03" strokeWidth="3" strokeLinecap="round" />
-                  <line x1="56" y1="46" x2="70" y2="46" stroke="#451a03" strokeWidth="3" strokeLinecap="round" />
+                  <line
+                    x1="30"
+                    y1="46"
+                    x2="44"
+                    y2="46"
+                    stroke="#451a03"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                  />
+                  <line
+                    x1="56"
+                    y1="46"
+                    x2="70"
+                    y2="46"
+                    stroke="#451a03"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                  />
                 </>
               ) : (
                 <>
@@ -322,10 +377,24 @@ export const MascotWidget: React.FC<MascotWidgetProps> = ({
             <svg viewBox="0 0 100 100" className="w-full h-full drop-shadow">
               {/* Antenna */}
               <line x1="50" y1="24" x2="50" y2="12" stroke="#0284c7" strokeWidth="3" />
-              <circle cx="50" cy="10" r="4.5" fill={isPlaying && !isPaused ? '#38bdf8' : '#0284c7'} />
+              <circle
+                cx="50"
+                cy="10"
+                r="4.5"
+                fill={isPlaying && !isPaused ? '#38bdf8' : '#0284c7'}
+              />
 
               {/* Bot Head */}
-              <rect x="20" y="24" width="60" height="52" rx="14" fill="#0f172a" stroke="#38bdf8" strokeWidth="2.5" />
+              <rect
+                x="20"
+                y="24"
+                width="60"
+                height="52"
+                rx="14"
+                fill="#0f172a"
+                stroke="#38bdf8"
+                strokeWidth="2.5"
+              />
               {/* Screen Face */}
               <rect x="26" y="32" width="48" height="36" rx="8" fill="#1e293b" />
 
@@ -345,13 +414,45 @@ export const MascotWidget: React.FC<MascotWidgetProps> = ({
               {/* Equalizer Mouth */}
               {isPlaying && !isPaused ? (
                 <g fill="#22c55e">
-                  <rect x="38" y={mouthOpen ? '53' : '55'} width="4" height={mouthOpen ? '7' : '3'} rx="1" />
-                  <rect x="44" y={mouthOpen ? '51' : '54'} width="4" height={mouthOpen ? '9' : '5'} rx="1" />
-                  <rect x="50" y={mouthOpen ? '50' : '54'} width="4" height={mouthOpen ? '10' : '5'} rx="1" />
-                  <rect x="56" y={mouthOpen ? '52' : '55'} width="4" height={mouthOpen ? '8' : '3'} rx="1" />
+                  <rect
+                    x="38"
+                    y={mouthOpen ? '53' : '55'}
+                    width="4"
+                    height={mouthOpen ? '7' : '3'}
+                    rx="1"
+                  />
+                  <rect
+                    x="44"
+                    y={mouthOpen ? '51' : '54'}
+                    width="4"
+                    height={mouthOpen ? '9' : '5'}
+                    rx="1"
+                  />
+                  <rect
+                    x="50"
+                    y={mouthOpen ? '50' : '54'}
+                    width="4"
+                    height={mouthOpen ? '10' : '5'}
+                    rx="1"
+                  />
+                  <rect
+                    x="56"
+                    y={mouthOpen ? '52' : '55'}
+                    width="4"
+                    height={mouthOpen ? '8' : '3'}
+                    rx="1"
+                  />
                 </g>
               ) : (
-                <line x1="38" y1="56" x2="62" y2="56" stroke="#38bdf8" strokeWidth="2" strokeLinecap="round" />
+                <line
+                  x1="38"
+                  y1="56"
+                  x2="62"
+                  y2="56"
+                  stroke="#38bdf8"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                />
               )}
             </svg>
           )}
@@ -360,9 +461,19 @@ export const MascotWidget: React.FC<MascotWidgetProps> = ({
           {type === 'cat' && (
             <svg viewBox="0 0 100 100" className="w-full h-full drop-shadow">
               {/* Ears */}
-              <polygon points="20,38 30,12 46,30" fill="#f87171" stroke="#dc2626" strokeWidth="1.5" />
+              <polygon
+                points="20,38 30,12 46,30"
+                fill="#f87171"
+                stroke="#dc2626"
+                strokeWidth="1.5"
+              />
               <polygon points="26,34 32,18 42,28" fill="#fee2e2" />
-              <polygon points="80,38 70,12 54,30" fill="#f87171" stroke="#dc2626" strokeWidth="1.5" />
+              <polygon
+                points="80,38 70,12 54,30"
+                fill="#f87171"
+                stroke="#dc2626"
+                strokeWidth="1.5"
+              />
               <polygon points="74,34 68,18 58,28" fill="#fee2e2" />
 
               {/* Cat Face */}
@@ -372,8 +483,20 @@ export const MascotWidget: React.FC<MascotWidgetProps> = ({
               {/* Eyes */}
               {isBlinking ? (
                 <>
-                  <path d="M 33 46 Q 38 42 43 46" stroke="#1f2937" strokeWidth="2.5" fill="none" strokeLinecap="round" />
-                  <path d="M 57 46 Q 62 42 67 46" stroke="#1f2937" strokeWidth="2.5" fill="none" strokeLinecap="round" />
+                  <path
+                    d="M 33 46 Q 38 42 43 46"
+                    stroke="#1f2937"
+                    strokeWidth="2.5"
+                    fill="none"
+                    strokeLinecap="round"
+                  />
+                  <path
+                    d="M 57 46 Q 62 42 67 46"
+                    stroke="#1f2937"
+                    strokeWidth="2.5"
+                    fill="none"
+                    strokeLinecap="round"
+                  />
                 </>
               ) : (
                 <>
@@ -385,17 +508,55 @@ export const MascotWidget: React.FC<MascotWidgetProps> = ({
               )}
 
               {/* Whiskers */}
-              <line x1="22" y1="54" x2="34" y2="56" stroke="#78716c" strokeWidth="1.5" strokeLinecap="round" />
-              <line x1="20" y1="60" x2="34" y2="60" stroke="#78716c" strokeWidth="1.5" strokeLinecap="round" />
-              <line x1="78" y1="54" x2="66" y2="56" stroke="#78716c" strokeWidth="1.5" strokeLinecap="round" />
-              <line x1="80" y1="60" x2="66" y2="60" stroke="#78716c" strokeWidth="1.5" strokeLinecap="round" />
+              <line
+                x1="22"
+                y1="54"
+                x2="34"
+                y2="56"
+                stroke="#78716c"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              />
+              <line
+                x1="20"
+                y1="60"
+                x2="34"
+                y2="60"
+                stroke="#78716c"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              />
+              <line
+                x1="78"
+                y1="54"
+                x2="66"
+                y2="56"
+                stroke="#78716c"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              />
+              <line
+                x1="80"
+                y1="60"
+                x2="66"
+                y2="60"
+                stroke="#78716c"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              />
 
               {/* Nose & Mouth */}
               <polygon points="48,55 52,55 50,58" fill="#f43f5e" />
               {mouthOpen ? (
                 <ellipse cx="50" cy="64" rx="4" ry="3.5" fill="#be123c" />
               ) : (
-                <path d="M 44 60 Q 50 63 50 60 Q 50 63 56 60" stroke="#1f2937" strokeWidth="2" fill="none" strokeLinecap="round" />
+                <path
+                  d="M 44 60 Q 50 63 50 60 Q 50 63 56 60"
+                  stroke="#1f2937"
+                  strokeWidth="2"
+                  fill="none"
+                  strokeLinecap="round"
+                />
               )}
             </svg>
           )}
@@ -404,15 +565,40 @@ export const MascotWidget: React.FC<MascotWidgetProps> = ({
           {type === 'bunny' && (
             <svg viewBox="0 0 100 100" className="w-full h-full drop-shadow">
               {/* Long Bunny Ears */}
-              <ellipse cx="34" cy="22" rx="9" ry="20" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1.5" transform="rotate(-12 34 22)" />
-              <ellipse cx="34" cy="22" rx="5" ry="14" fill="#fbcfe8" transform="rotate(-12 34 22)" />
-              
-              <ellipse cx="66" cy="22" rx="9" ry="20" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1.5" transform="rotate(12 66 22)" />
+              <ellipse
+                cx="34"
+                cy="22"
+                rx="9"
+                ry="20"
+                fill="#f1f5f9"
+                stroke="#cbd5e1"
+                strokeWidth="1.5"
+                transform="rotate(-12 34 22)"
+              />
+              <ellipse
+                cx="34"
+                cy="22"
+                rx="5"
+                ry="14"
+                fill="#fbcfe8"
+                transform="rotate(-12 34 22)"
+              />
+
+              <ellipse
+                cx="66"
+                cy="22"
+                rx="9"
+                ry="20"
+                fill="#f1f5f9"
+                stroke="#cbd5e1"
+                strokeWidth="1.5"
+                transform="rotate(12 66 22)"
+              />
               <ellipse cx="66" cy="22" rx="5" ry="14" fill="#fbcfe8" transform="rotate(12 66 22)" />
 
               {/* Bunny Head */}
               <circle cx="50" cy="58" r="32" fill="#f8fafc" stroke="#e2e8f0" strokeWidth="1.5" />
-              
+
               {/* Cheeks Blush */}
               <circle cx="28" cy="62" r="6" fill="#f472b6" opacity="0.35" />
               <circle cx="72" cy="62" r="6" fill="#f472b6" opacity="0.35" />
@@ -420,8 +606,20 @@ export const MascotWidget: React.FC<MascotWidgetProps> = ({
               {/* Eyes */}
               {isBlinking ? (
                 <>
-                  <path d="M 33 54 Q 38 50 43 54" stroke="#475569" strokeWidth="2.5" fill="none" strokeLinecap="round" />
-                  <path d="M 57 54 Q 62 50 67 54" stroke="#475569" strokeWidth="2.5" fill="none" strokeLinecap="round" />
+                  <path
+                    d="M 33 54 Q 38 50 43 54"
+                    stroke="#475569"
+                    strokeWidth="2.5"
+                    fill="none"
+                    strokeLinecap="round"
+                  />
+                  <path
+                    d="M 57 54 Q 62 50 67 54"
+                    stroke="#475569"
+                    strokeWidth="2.5"
+                    fill="none"
+                    strokeLinecap="round"
+                  />
                 </>
               ) : (
                 <>
@@ -437,11 +635,20 @@ export const MascotWidget: React.FC<MascotWidgetProps> = ({
               {mouthOpen ? (
                 <ellipse cx="50" cy="72" rx="4" ry="3.5" fill="#db2777" />
               ) : (
-                <path d="M 45 68 Q 50 71 50 68 Q 50 71 55 68" stroke="#64748b" strokeWidth="2" fill="none" strokeLinecap="round" />
+                <path
+                  d="M 45 68 Q 50 71 50 68 Q 50 71 55 68"
+                  stroke="#64748b"
+                  strokeWidth="2"
+                  fill="none"
+                  strokeLinecap="round"
+                />
               )}
 
               {/* Star Barrette Accessory */}
-              <polygon points="68,40 70,44 75,44 71,47 73,51 68,48 64,51 66,47 62,44 67,44" fill="#fbbf24" />
+              <polygon
+                points="68,40 70,44 75,44 71,47 73,51 68,48 64,51 66,47 62,44 67,44"
+                fill="#fbbf24"
+              />
             </svg>
           )}
 
@@ -449,8 +656,18 @@ export const MascotWidget: React.FC<MascotWidgetProps> = ({
           {type === 'dragon' && (
             <svg viewBox="0 0 100 100" className="w-full h-full drop-shadow">
               {/* Dragon Horns */}
-              <path d="M 28 35 Q 16 15 24 8 Q 30 18 34 30 Z" fill="#d97706" stroke="#92400e" strokeWidth="1.5" />
-              <path d="M 72 35 Q 84 15 76 8 Q 70 18 66 30 Z" fill="#d97706" stroke="#92400e" strokeWidth="1.5" />
+              <path
+                d="M 28 35 Q 16 15 24 8 Q 30 18 34 30 Z"
+                fill="#d97706"
+                stroke="#92400e"
+                strokeWidth="1.5"
+              />
+              <path
+                d="M 72 35 Q 84 15 76 8 Q 70 18 66 30 Z"
+                fill="#d97706"
+                stroke="#92400e"
+                strokeWidth="1.5"
+              />
 
               {/* Little Wings */}
               <polygon points="12,50 4,38 18,44" fill="#047857" stroke="#065f46" strokeWidth="1" />
@@ -458,7 +675,7 @@ export const MascotWidget: React.FC<MascotWidgetProps> = ({
 
               {/* Dragon Head */}
               <circle cx="50" cy="54" r="33" fill="#10b981" stroke="#059669" strokeWidth="2" />
-              
+
               {/* Scaled Brow Crest */}
               <path d="M 38 28 Q 50 20 62 28 Q 50 24 38 28 Z" fill="#059669" />
 
@@ -468,15 +685,47 @@ export const MascotWidget: React.FC<MascotWidgetProps> = ({
               {/* Eyes */}
               {isBlinking ? (
                 <>
-                  <line x1="33" y1="46" x2="43" y2="46" stroke="#064e3b" strokeWidth="3" strokeLinecap="round" />
-                  <line x1="57" y1="46" x2="67" y2="46" stroke="#064e3b" strokeWidth="3" strokeLinecap="round" />
+                  <line
+                    x1="33"
+                    y1="46"
+                    x2="43"
+                    y2="46"
+                    stroke="#064e3b"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                  />
+                  <line
+                    x1="57"
+                    y1="46"
+                    x2="67"
+                    y2="46"
+                    stroke="#064e3b"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                  />
                 </>
               ) : (
                 <>
                   <circle cx="38" cy="46" r="5" fill="#f59e0b" />
-                  <line x1="38" y1="42" x2="38" y2="50" stroke="#064e3b" strokeWidth="2.5" strokeLinecap="round" />
+                  <line
+                    x1="38"
+                    y1="42"
+                    x2="38"
+                    y2="50"
+                    stroke="#064e3b"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                  />
                   <circle cx="62" cy="46" r="5" fill="#f59e0b" />
-                  <line x1="62" y1="42" x2="62" y2="50" stroke="#064e3b" strokeWidth="2.5" strokeLinecap="round" />
+                  <line
+                    x1="62"
+                    y1="42"
+                    x2="62"
+                    y2="50"
+                    stroke="#064e3b"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                  />
                 </>
               )}
 
@@ -491,7 +740,13 @@ export const MascotWidget: React.FC<MascotWidgetProps> = ({
                   <circle cx="50" cy="68" r="3" fill="#f97316" className="animate-ping" />
                 </>
               ) : (
-                <path d="M 44 68 Q 50 72 56 68" stroke="#065f46" strokeWidth="2" fill="none" strokeLinecap="round" />
+                <path
+                  d="M 44 68 Q 50 72 56 68"
+                  stroke="#065f46"
+                  strokeWidth="2"
+                  fill="none"
+                  strokeLinecap="round"
+                />
               )}
             </svg>
           )}

@@ -40,7 +40,7 @@ export default function App() {
   const showToast = useCallback((msg: string) => {
     setToastMessage(msg);
     setTimeout(() => {
-      setToastMessage((prev) => (prev === msg ? null : prev));
+      setToastMessage(prev => (prev === msg ? null : prev));
     }, 2400);
   }, []);
 
@@ -140,8 +140,8 @@ export default function App() {
   const currentSentences = useMemo<SentenceItem[]>(() => {
     if (!currentChapter) return [];
     const list: SentenceItem[] = [];
-    currentChapter.paragraphs.forEach((p) => {
-      p.sentences.forEach((s) => {
+    currentChapter.paragraphs.forEach(p => {
+      p.sentences.forEach(s => {
         list.push(s);
       });
     });
@@ -152,7 +152,7 @@ export default function App() {
   const bookmarkedSentenceIndices = useMemo<Set<number>>(() => {
     if (!currentDocument) return new Set();
     const set = new Set<number>();
-    bookmarks.forEach((b) => {
+    bookmarks.forEach(b => {
       if (b.documentId === currentDocument.id && b.chapterIndex === currentChapterIndex) {
         set.add(b.sentenceIndex);
       }
@@ -163,7 +163,7 @@ export default function App() {
   // On chapter completion callback
   const handleChapterComplete = useCallback(() => {
     if (currentDocument && currentChapterIndex < currentDocument.chapters.length - 1) {
-      setCurrentChapterIndex((prev) => prev + 1);
+      setCurrentChapterIndex(prev => prev + 1);
     }
   }, [currentDocument, currentChapterIndex]);
 
@@ -189,7 +189,7 @@ export default function App() {
     checkRVCServerHealth,
   } = useTTS(
     currentSentences,
-    (sentenceIdx) => {
+    sentenceIdx => {
       if (currentDocument) {
         saveReadingPosition(
           {
@@ -214,7 +214,9 @@ export default function App() {
     setCurrentDocument(newDoc);
     setCurrentChapterIndex(0);
     saveDocument(newDoc).catch(() =>
-      showToast('Không lưu được tài liệu vào bộ nhớ dài hạn — phiên đọc chỉ tồn tại trong tab hiện tại')
+      showToast(
+        'Không lưu được tài liệu vào bộ nhớ dài hạn — phiên đọc chỉ tồn tại trong tab hiện tại'
+      )
     );
     setActiveDocumentId(newDoc.id);
     saveReadingPosition({
@@ -293,7 +295,7 @@ export default function App() {
     if (!currentDocument || !currentChapter) return;
     const docId = currentDocument.id;
     const existing = bookmarks.find(
-      (b) =>
+      b =>
         b.documentId === docId &&
         b.chapterIndex === currentChapterIndex &&
         b.sentenceIndex === currentSentenceIndex
@@ -361,7 +363,7 @@ export default function App() {
         updateSettings({ mascotEnabled: !settings.mascotEnabled });
         showToast(settings.mascotEnabled ? 'Mascot hidden' : 'Mascot companion active');
       } else if (e.key === 's' || e.key === 'S') {
-        setIsStatsOpen((prev) => !prev);
+        setIsStatsOpen(prev => !prev);
       } else if (e.code === 'Escape') {
         setIsSettingsOpen(false);
         setIsUploadOpen(false);
@@ -467,7 +469,7 @@ export default function App() {
         onTogglePlay={togglePlay}
         onPrevSentence={prevSentence}
         onNextSentence={nextSentence}
-        onJumpToSentence={(idx) => jumpToSentence(idx, isPlaying)}
+        onJumpToSentence={idx => jumpToSentence(idx, isPlaying)}
         onPrevChapter={handlePrevChapter}
         onNextChapter={handleNextChapter}
         onOpenSettings={() => setIsSettingsOpen(true)}
@@ -509,7 +511,7 @@ export default function App() {
         currentSentenceText={currentSentenceText}
         bookmarks={bookmarks}
         onJumpToBookmark={handleJumpToBookmark}
-        onAddCurrentBookmark={(note) => {
+        onAddCurrentBookmark={note => {
           if (currentDocument && currentChapter) {
             addBookmark(
               currentDocument.id,
@@ -522,7 +524,7 @@ export default function App() {
             showToast('Bookmark added');
           }
         }}
-        onRemoveBookmark={(id) => {
+        onRemoveBookmark={id => {
           removeBookmark(id);
           showToast('Bookmark deleted');
         }}

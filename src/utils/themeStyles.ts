@@ -88,7 +88,10 @@ export const THEMES: Record<ThemeMode, ThemeConfig> = {
   },
 };
 
-export const FONT_FAMILIES: Record<FontFamily, { name: string; cssFamily: string; description: string }> = {
+export const FONT_FAMILIES: Record<
+  FontFamily,
+  { name: string; cssFamily: string; description: string }
+> = {
   merriweather: {
     name: 'Merriweather',
     cssFamily: "'Merriweather', serif",
@@ -121,7 +124,8 @@ export function getHighlightClass(
   theme: ThemeMode,
   isActive: boolean
 ): string {
-  if (!isActive) return 'hover:bg-amber-500/10 cursor-pointer transition-colors duration-150 rounded px-1 -mx-1';
+  if (!isActive)
+    return 'hover:bg-amber-500/10 cursor-pointer transition-colors duration-150 rounded px-1 -mx-1';
 
   const isDark = theme === 'dark' || theme === 'midnight' || theme === 'forest';
 

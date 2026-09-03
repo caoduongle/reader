@@ -26,9 +26,7 @@ export function useBookmarks(documentId?: string) {
   }, [bookmarks]);
 
   // Bookmarks specific to the currently active document
-  const currentDocBookmarks = bookmarks.filter(
-    (b) => !documentId || b.documentId === documentId
-  );
+  const currentDocBookmarks = bookmarks.filter(b => !documentId || b.documentId === documentId);
 
   const addBookmark = useCallback(
     (
@@ -50,20 +48,25 @@ export function useBookmarks(documentId?: string) {
         createdAt: Date.now(),
       };
 
-      setBookmarks((prev) => {
+      setBookmarks(prev => {
         // Prevent exact duplicate bookmarks for same chapter & sentence
         const exists = prev.some(
-          (b) =>
+          b =>
             b.documentId === docId &&
             b.chapterIndex === chapterIndex &&
             b.sentenceIndex === sentenceIndex
         );
         if (exists) {
-          return prev.map((b) =>
+          return prev.map(b =>
             b.documentId === docId &&
             b.chapterIndex === chapterIndex &&
             b.sentenceIndex === sentenceIndex
-              ? { ...b, snippet: snippet.trim(), note: note?.trim() || b.note, createdAt: Date.now() }
+              ? {
+                  ...b,
+                  snippet: snippet.trim(),
+                  note: note?.trim() || b.note,
+                  createdAt: Date.now(),
+                }
               : b
           );
         }
@@ -76,23 +79,21 @@ export function useBookmarks(documentId?: string) {
   );
 
   const removeBookmark = useCallback((id: string) => {
-    setBookmarks((prev) => prev.filter((b) => b.id !== id));
+    setBookmarks(prev => prev.filter(b => b.id !== id));
   }, []);
 
   const updateBookmarkNote = useCallback((id: string, note: string) => {
-    setBookmarks((prev) =>
-      prev.map((b) => (b.id === id ? { ...b, note } : b))
-    );
+    setBookmarks(prev => prev.map(b => (b.id === id ? { ...b, note } : b)));
   }, []);
 
   const clearAllBookmarksForDoc = useCallback((docId: string) => {
-    setBookmarks((prev) => prev.filter((b) => b.documentId !== docId));
+    setBookmarks(prev => prev.filter(b => b.documentId !== docId));
   }, []);
 
   const isBookmarked = useCallback(
     (docId: string, chapterIndex: number, sentenceIndex: number) => {
       return bookmarks.some(
-        (b) =>
+        b =>
           b.documentId === docId &&
           b.chapterIndex === chapterIndex &&
           b.sentenceIndex === sentenceIndex

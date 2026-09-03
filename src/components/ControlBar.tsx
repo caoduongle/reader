@@ -134,7 +134,8 @@ export const ControlBar: React.FC<ControlBarProps> = ({
                 {currentChapterTitle}
               </span>
               <span>
-                {totalSentences > 0 ? `${currentSentenceIndex + 1}/${totalSentences}` : '0/0'} ({progressPercent}%)
+                {totalSentences > 0 ? `${currentSentenceIndex + 1}/${totalSentences}` : '0/0'} (
+                {progressPercent}%)
               </span>
             </div>
 
@@ -156,7 +157,7 @@ export const ControlBar: React.FC<ControlBarProps> = ({
                 min={0}
                 max={Math.max(0, totalSentences - 1)}
                 value={currentSentenceIndex}
-                onChange={(e) => onJumpToSentence(Number(e.target.value))}
+                onChange={e => onJumpToSentence(Number(e.target.value))}
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                 title="Scrub reading position"
               />
@@ -175,9 +176,7 @@ export const ControlBar: React.FC<ControlBarProps> = ({
                 }}
                 title="Playback Rate"
                 className={`px-2 py-1 rounded-lg text-xs font-mono font-medium transition-colors ${
-                  isDark
-                    ? 'text-amber-500 hover:bg-white/5'
-                    : 'text-amber-800 bg-amber-100'
+                  isDark ? 'text-amber-500 hover:bg-white/5' : 'text-amber-800 bg-amber-100'
                 }`}
               >
                 {settings.rate}x
@@ -187,13 +186,15 @@ export const ControlBar: React.FC<ControlBarProps> = ({
               {showSpeedPopup && (
                 <div
                   className={`absolute bottom-full right-0 mb-3 p-2 rounded-xl shadow-2xl border backdrop-blur-xl flex flex-col gap-1 z-50 min-w-[120px] ${
-                    isDark ? 'bg-[#16161A] border-white/10 text-slate-200' : 'bg-white/95 border-neutral-200'
+                    isDark
+                      ? 'bg-[#16161A] border-white/10 text-slate-200'
+                      : 'bg-white/95 border-neutral-200'
                   }`}
                 >
                   <div className="text-[10px] uppercase font-bold tracking-wider px-2 py-1 text-slate-500">
                     Voice Speed
                   </div>
-                  {speedOptions.map((rate) => (
+                  {speedOptions.map(rate => (
                     <button
                       key={rate}
                       onClick={() => {
@@ -204,8 +205,8 @@ export const ControlBar: React.FC<ControlBarProps> = ({
                         settings.rate === rate
                           ? 'bg-amber-600 text-black font-bold'
                           : isDark
-                          ? 'hover:bg-white/5 text-slate-300'
-                          : 'hover:bg-neutral-100 text-neutral-800'
+                            ? 'hover:bg-white/5 text-slate-300'
+                            : 'hover:bg-neutral-100 text-neutral-800'
                       }`}
                     >
                       <span>{rate}x</span>
@@ -226,7 +227,9 @@ export const ControlBar: React.FC<ControlBarProps> = ({
                 }}
                 title="Volume"
                 className={`p-1.5 rounded-lg transition-colors ${
-                  isDark ? 'text-slate-400 hover:text-white hover:bg-white/5' : 'hover:bg-neutral-100 text-neutral-700'
+                  isDark
+                    ? 'text-slate-400 hover:text-white hover:bg-white/5'
+                    : 'hover:bg-neutral-100 text-neutral-700'
                 }`}
               >
                 {settings.volume === 0 ? (
@@ -240,14 +243,20 @@ export const ControlBar: React.FC<ControlBarProps> = ({
               {showVolumePopup && (
                 <div
                   className={`absolute bottom-full right-0 mb-3 p-3 rounded-xl shadow-2xl border backdrop-blur-xl flex items-center space-x-2 z-50 min-w-[170px] ${
-                    isDark ? 'bg-[#16161A] border-white/10 text-slate-200' : 'bg-white/95 border-neutral-200'
+                    isDark
+                      ? 'bg-[#16161A] border-white/10 text-slate-200'
+                      : 'bg-white/95 border-neutral-200'
                   }`}
                 >
                   <button
                     onClick={() => onUpdateSettings({ volume: settings.volume === 0 ? 1.0 : 0 })}
                     className="p-1 text-slate-400 hover:text-amber-500"
                   >
-                    {settings.volume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+                    {settings.volume === 0 ? (
+                      <VolumeX className="w-4 h-4" />
+                    ) : (
+                      <Volume2 className="w-4 h-4" />
+                    )}
                   </button>
                   <input
                     type="range"
@@ -255,7 +264,7 @@ export const ControlBar: React.FC<ControlBarProps> = ({
                     max={1}
                     step={0.05}
                     value={settings.volume}
-                    onChange={(e) => onUpdateSettings({ volume: Number(e.target.value) })}
+                    onChange={e => onUpdateSettings({ volume: Number(e.target.value) })}
                     className="w-24 accent-amber-500 cursor-pointer h-1 bg-white/20 rounded-lg"
                   />
                   <span className="text-xs font-mono w-8 text-right text-slate-300">
@@ -271,7 +280,9 @@ export const ControlBar: React.FC<ControlBarProps> = ({
               onClick={onOpenTOC}
               title="Table of Contents"
               className={`p-1.5 rounded-lg transition-colors ${
-                isDark ? 'text-slate-400 hover:text-white hover:bg-white/5' : 'hover:bg-neutral-100 text-neutral-700'
+                isDark
+                  ? 'text-slate-400 hover:text-white hover:bg-white/5'
+                  : 'hover:bg-neutral-100 text-neutral-700'
               }`}
             >
               <BookOpen className="w-4 h-4" />
@@ -283,7 +294,9 @@ export const ControlBar: React.FC<ControlBarProps> = ({
               onClick={onOpenSettings}
               title="Voice & Reader Settings"
               className={`p-1.5 rounded-lg transition-colors ${
-                isDark ? 'text-slate-400 hover:text-amber-500 hover:bg-white/5' : 'hover:bg-amber-100 text-neutral-800'
+                isDark
+                  ? 'text-slate-400 hover:text-amber-500 hover:bg-white/5'
+                  : 'hover:bg-amber-100 text-neutral-800'
               }`}
             >
               <Settings className="w-4 h-4" />

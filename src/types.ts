@@ -2,7 +2,8 @@ export type ThemeMode = 'light' | 'dark' | 'sepia' | 'forest' | 'midnight' | 'pa
 
 export type FontFamily = 'sans' | 'lora' | 'merriweather' | 'mono' | 'playfair';
 
-export type HighlightStyle = 'soft-gold' | 'neon-glow' | 'emerald' | 'underlined' | 'lilac' | 'amber-box';
+export type HighlightStyle =
+  'soft-gold' | 'neon-glow' | 'emerald' | 'underlined' | 'lilac' | 'amber-box';
 
 export type MascotType = 'fox' | 'owl' | 'bot' | 'cat' | 'bunny' | 'dragon';
 
@@ -137,4 +138,3 @@ export interface ReadingStatsSummary {
   dailyStats: DailyReadingStat[]; // last 7 days (chronological order)
   recentSessions: ReadingSessionRecord[];
 }
-

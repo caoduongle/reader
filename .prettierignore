@@ -1,0 +1,11 @@
+node_modules
+dist
+dist-electron
+release
+python-backend
+specs
+.specify
+.agents
+package-lock.json
+*.min.js
+*.min.mjs

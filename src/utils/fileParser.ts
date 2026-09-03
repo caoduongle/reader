@@ -10,7 +10,7 @@ let jszipPromise: Promise<any> | null = null;
 
 async function getPdfJs(): Promise<typeof import('pdfjs-dist')> {
   if (!pdfjsPromise) {
-    pdfjsPromise = import('pdfjs-dist').then((pdfjs) => {
+    pdfjsPromise = import('pdfjs-dist').then(pdfjs => {
       if (!pdfjs.GlobalWorkerOptions.workerSrc) {
         pdfjs.GlobalWorkerOptions.workerSrc = new URL(
           'pdfjs-dist/build/pdf.worker.min.mjs',
@@ -25,7 +25,7 @@ async function getPdfJs(): Promise<typeof import('pdfjs-dist')> {
 
 async function getJsZip(): Promise<any> {
   if (!jszipPromise) {
-    jszipPromise = import('jszip').then((mod) => mod.default || mod);
+    jszipPromise = import('jszip').then(mod => mod.default || mod);
   }
   return jszipPromise;
 }
@@ -58,10 +58,7 @@ export async function parsePdfFile(
     throw new DOMException('Parsing cancelled', 'AbortError');
   }
 
-  const [pdfjsLib, arrayBuffer] = await Promise.all([
-    getPdfJs(),
-    file.arrayBuffer(),
-  ]);
+  const [pdfjsLib, arrayBuffer] = await Promise.all([getPdfJs(), file.arrayBuffer()]);
 
   if (signal?.aborted) {
     throw new DOMException('Parsing cancelled', 'AbortError');
@@ -79,7 +76,7 @@ export async function parsePdfFile(
     }
     const page = await pdfDoc.getPage(i);
     const textContent = await page.getTextContent();
-    
+
     // Group text items by roughly their Y coordinate or line flow
     let lastY: number | null = null;
     let pageString = '';
@@ -123,10 +120,7 @@ export async function parseEpubFile(
     throw new DOMException('Parsing cancelled', 'AbortError');
   }
 
-  const [JSZip, arrayBuffer] = await Promise.all([
-    getJsZip(),
-    file.arrayBuffer(),
-  ]);
+  const [JSZip, arrayBuffer] = await Promise.all([getJsZip(), file.arrayBuffer()]);
 
   if (signal?.aborted) {
     throw new DOMException('Parsing cancelled', 'AbortError');
@@ -154,7 +148,9 @@ export async function parseEpubFile(
     throw new Error(`OPF file not found at ${rootfilePath}`);
   }
 
-  const opfDir = rootfilePath.includes('/') ? rootfilePath.substring(0, rootfilePath.lastIndexOf('/') + 1) : '';
+  const opfDir = rootfilePath.includes('/')
+    ? rootfilePath.substring(0, rootfilePath.lastIndexOf('/') + 1)
+    : '';
   const opfXml = await opfFile.async('text');
   const opfDoc = parser.parseFromString(opfXml, 'application/xml');
 
@@ -201,10 +197,13 @@ export async function parseEpubFile(
       doc.querySelectorAll('script, style, head').forEach(el => el.remove());
 
       // Extract chapter title from h1, h2 or title tag
-      const heading = doc.querySelector('h1, h2, h3, title')?.textContent?.trim() || `Chapter ${i + 1}`;
+      const heading =
+        doc.querySelector('h1, h2, h3, title')?.textContent?.trim() || `Chapter ${i + 1}`;
 
       // Convert paragraphs/divs to text with clean spacing
-      const elements = doc.body ? Array.from(doc.body.querySelectorAll('p, h1, h2, h3, h4, blockquote, li, div')) : [];
+      const elements = doc.body
+        ? Array.from(doc.body.querySelectorAll('p, h1, h2, h3, h4, blockquote, li, div'))
+        : [];
       let chapterText = '';
 
       if (elements.length > 0) {
@@ -219,7 +218,7 @@ export async function parseEpubFile(
       if (chapterText.trim().length > 30) {
         extractedChapters.push({
           title: heading,
-          content: chapterText.trim()
+          content: chapterText.trim(),
         });
         fullTextParts.push(chapterText.trim());
       }
@@ -242,17 +241,20 @@ export async function parseEpubFile(
         title: chap.title,
         paragraphs: parsed[0]?.paragraphs || [],
         totalSentences: parsed[0]?.totalSentences || 0,
-        wordCount: parsed[0]?.wordCount || 0
+        wordCount: parsed[0]?.wordCount || 0,
       };
     });
   } else {
-    finalChapters = parseNovelText(combinedRaw || 'No readable text content found in EPUB.', docTitle);
+    finalChapters = parseNovelText(
+      combinedRaw || 'No readable text content found in EPUB.',
+      docTitle
+    );
   }
 
   return {
     title: docTitle,
     author: docAuthor,
     chapters: finalChapters,
-    rawText: combinedRaw
+    rawText: combinedRaw,
   };
 }
