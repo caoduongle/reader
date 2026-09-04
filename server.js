@@ -12,7 +12,7 @@ const app = express();
 const PORT = process.env.PROXY_PORT || 3001;
 const HOST = '127.0.0.1'; // BIND STRICTLY TO 127.0.0.1 (SECURITY)
 
-app.use(express.json());
+app.use(express.json({ limit: '15mb' }));
 
 // Whitelist of trusted origins allowed to access proxy routes
 // 'null' is the serialized Origin header sent by Chromium/Electron when loading pages via file:// in packaged builds
@@ -180,6 +180,85 @@ app.post('/api/fetch-url', async (req, res) => {
       error: `Lỗi kết nối đến trang web: ${message}`,
     });
   }
+});
+
+// Screen Reader OCR endpoint using Google GenAI Vision
+app.post('/api/ocr', async (req, res) => {
+  const { image } = req.body || {};
+
+  if (!image || typeof image !== 'string' || image.trim() === '') {
+    return res.status(400).json({
+      ok: false,
+      error: 'Dữ liệu hình ảnh không hợp lệ hoặc để trống.',
+    });
+  }
+
+  // Strip data URI prefix if present
+  const base64Data = image.replace(/^data:image\/[a-zA-Z0-9+.-]+;base64,/, '').trim();
+  if (!base64Data) {
+    return res.status(400).json({
+      ok: false,
+      error: 'Dữ liệu hình ảnh không hợp lệ hoặc để trống.',
+    });
+  }
+
+  // Check decoded size limit (15MB)
+  const estimatedDecodedBytes = (base64Data.length * 3) / 4;
+  if (estimatedDecodedBytes > 15 * 1024 * 1024) {
+    return res.status(400).json({
+      ok: false,
+      error: 'Kích thước hình ảnh vượt quá giới hạn cho phép (tối đa 15MB).',
+    });
+  }
+
+  const rawKey = process.env.GEMINI_API_KEY;
+  if (!rawKey || rawKey.trim() === '' || rawKey === 'MY_GEMINI_API_KEY') {
+    return res.status(503).json({
+      ok: false,
+      error:
+        'GEMINI_API_KEY is not configured on server. Please add a valid key to your local .env file.',
+    });
+  }
+
+  try {
+    const ai = new GoogleGenAI({ apiKey: rawKey.trim() });
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: [
+        {
+          inlineData: {
+            mimeType: 'image/png',
+            data: base64Data,
+          },
+        },
+        'Chỉ trả về nguyên văn chữ nhận diện được trong ảnh, không thêm bất kỳ lời giải thích, lời chào hay định dạng markdown nào. Nếu không có chữ, trả về chuỗi rỗng.',
+      ],
+    });
+
+    const text = (response.text || '').trim();
+    return res.json({
+      ok: true,
+      text,
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error('[OCR Error]:', errorMessage);
+    return res.status(500).json({
+      ok: false,
+      error: `Lỗi khi xử lý nhận diện chữ: ${errorMessage}`,
+    });
+  }
+});
+
+// Error handler for JSON payload size limit and parsing errors
+app.use((err, req, res, next) => {
+  if (err && (err.type === 'entity.too.large' || err.status === 413)) {
+    return res.status(400).json({
+      ok: false,
+      error: 'Kích thước hình ảnh vượt quá giới hạn cho phép (tối đa 15MB).',
+    });
+  }
+  next(err);
 });
 
 // Only listen if executed directly (allows testing)
