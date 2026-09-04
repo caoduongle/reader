@@ -97,6 +97,9 @@ def speak():
     if not text:
         return jsonify({"error": "Thieu 'text' trong request"}), 400
 
+    if len(text) > 10000:
+        return jsonify({"error": "Độ dài văn bản vượt quá giới hạn tối đa (10,000 ký tự)."}), 400
+
     tmp_dir = tempfile.mkdtemp(prefix="tts_rvc_")
     base_path = os.path.join(tmp_dir, "base.mp3")
     out_path = os.path.join(tmp_dir, "out.wav")
@@ -114,7 +117,7 @@ def speak():
 
     except Exception as e:
         traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Đã xảy ra lỗi khi tổng hợp giọng nói."}), 500
 
     finally:
         for p in (base_path, out_path):
@@ -128,11 +131,14 @@ def speak():
 
 @app.after_request
 def _add_cors_headers(resp):
-    # Extension da co host_permissions cho http://localhost/* nen thuong khong
-    # can CORS, nhung them vao cho chac va de test truc tiep bang trinh duyet/curl.
-    resp.headers["Access-Control-Allow-Origin"] = "*"
-    resp.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
-    resp.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    origin = request.headers.get("Origin")
+    allowed_origins = {"http://localhost:3000", "http://127.0.0.1:3000", "null"}
+    if origin and (origin in allowed_origins or origin.startswith("chrome-extension://")):
+        resp.headers["Access-Control-Allow-Origin"] = origin
+        resp.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
+        resp.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    resp.headers["X-Content-Type-Options"] = "nosniff"
+    resp.headers["X-Frame-Options"] = "DENY"
     return resp
 
 

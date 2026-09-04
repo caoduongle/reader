@@ -16,9 +16,16 @@ Thumbs.db
 *.tmp
 *.zip
 
-# Environment variables
+# Environment variables & secrets
 .env*
 !.env.example
+*.pem
+*.key
+*.cert
+*.pfx
+credentials.json
+service-account.json
+
 
 # IDE & Editor files
 .vscode/
