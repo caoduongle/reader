@@ -228,7 +228,19 @@ export default function App() {
       progressPercentage: 0,
       updatedAt: Date.now(),
     });
+    showToast(`Đã nạp thành công: "${newDoc.title}"`);
   };
+
+  // Dynamically synchronize browser tab title with active novel & chapter
+  useEffect(() => {
+    if (currentDocument) {
+      const chapter = currentDocument.chapters[currentChapterIndex];
+      const chapterName = chapter?.title ? ` - ${chapter.title}` : '';
+      document.title = `${currentDocument.title}${chapterName} | VoxRead`;
+    } else {
+      document.title = 'VoxRead - Trình đọc truyện & Tài liệu giọng AI';
+    }
+  }, [currentDocument, currentChapterIndex]);
 
   // Switch chapter
   const handleSelectChapter = (chapterIdx: number) => {
@@ -432,7 +444,7 @@ export default function App() {
   return (
     <div
       id="voxread-app-root"
-      className={`min-h-screen flex flex-col transition-colors duration-300 ${themeConfig.bg} selection:bg-amber-500/30 selection:text-amber-200`}
+      className={`min-h-screen max-w-full overflow-x-hidden flex flex-col transition-colors duration-300 ${themeConfig.bg} selection:bg-amber-500/30 selection:text-amber-200`}
     >
       {/* Top Navigation */}
       <ReaderNavbar
@@ -492,6 +504,14 @@ export default function App() {
             onPrevChapter={handlePrevChapter}
             onNextChapter={handleNextChapter}
             onOpenUpload={() => setIsUploadOpen(true)}
+            onResetToSample={() => {
+              clearReadingPosition();
+              setCurrentDocument(SAMPLE_DOCUMENTS[0]);
+              setCurrentChapterIndex(0);
+              showToast('Đã quay về tài liệu mẫu');
+            }}
+            onOpenSettings={() => setIsSettingsOpen(true)}
+            onOpenTOC={() => setIsTOCOpen(true)}
           />
         </ErrorBoundary>
       </main>

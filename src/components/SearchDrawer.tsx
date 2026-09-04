@@ -59,11 +59,13 @@ export const SearchDrawer: React.FC<SearchDrawerProps> = ({
         <div className="p-4 border-b border-white/10 flex items-center justify-between">
           <div className="flex items-center space-x-2">
             <Search className="w-4 h-4 text-amber-500" />
-            <h3 className="font-bold text-sm text-white">Find in Document</h3>
+            <h3 className="font-bold text-sm text-white">Tìm kiếm trong sách</h3>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+            aria-label="Đóng tìm kiếm"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
@@ -76,7 +78,7 @@ export const SearchDrawer: React.FC<SearchDrawerProps> = ({
             <input
               type="text"
               autoFocus
-              placeholder="Type word or phrase to search..."
+              placeholder="Nhập từ hoặc cụm từ cần tìm..."
               value={query}
               onChange={e => setQuery(e.target.value)}
               className="w-full pl-9 pr-3 py-2 bg-white/5 border border-white/10 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
@@ -85,8 +87,8 @@ export const SearchDrawer: React.FC<SearchDrawerProps> = ({
           <div className="mt-1.5 text-[11px] text-slate-400 flex justify-between px-1">
             <span>
               {query.length >= 2
-                ? `${matches.length} matches found`
-                : 'Enter at least 2 characters'}
+                ? `${matches.length} kết quả phù hợp`
+                : 'Nhập ít nhất 2 ký tự'}
             </span>
           </div>
         </div>
@@ -105,7 +107,7 @@ export const SearchDrawer: React.FC<SearchDrawerProps> = ({
               <div className="flex items-center justify-between text-[10px] text-amber-500 font-semibold mb-1">
                 <span>{m.matchSnippet}</span>
                 <span className="opacity-75 flex items-center space-x-1 group-hover:translate-x-1 transition-transform">
-                  <span>Jump</span>
+                  <span>Đi đến</span>
                   <CornerDownLeft className="w-3 h-3" />
                 </span>
               </div>
@@ -115,7 +117,7 @@ export const SearchDrawer: React.FC<SearchDrawerProps> = ({
 
           {query.length >= 2 && matches.length === 0 && (
             <div className="text-center py-10 text-slate-500 text-xs">
-              No results found for &quot;{query}&quot;.
+              Không tìm thấy kết quả nào cho &quot;{query}&quot;.
             </div>
           )}
         </div>

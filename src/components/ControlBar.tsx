@@ -66,25 +66,27 @@ export const ControlBar: React.FC<ControlBarProps> = ({
   return (
     <div
       id="floating-audio-control-bar"
-      className="fixed bottom-4 left-1/2 -translate-x-1/2 z-30 w-[95%] max-w-3xl select-none"
+      className="fixed bottom-3 sm:bottom-4 left-1/2 -translate-x-1/2 z-30 w-[96%] max-w-3xl select-none"
     >
       <div
-        className={`rounded-full backdrop-blur-xl px-6 py-2.5 shadow-2xl border transition-all ${
+        className={`rounded-2xl md:rounded-full backdrop-blur-xl px-3 sm:px-6 py-2 shadow-2xl border transition-all ${
           isDark
             ? 'bg-[#0D0D0F]/95 border-white/10 text-slate-200 shadow-black/80'
             : 'bg-white/95 border-amber-900/15 text-neutral-800 shadow-neutral-500/20'
         }`}
       >
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center justify-between gap-2.5 sm:gap-4">
           {/* Left: Previous / Play / Next */}
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-1 sm:space-x-2 shrink-0">
             {/* Prev Sentence */}
             <button
               id="tts-prev-sentence-btn"
+              type="button"
               onClick={onPrevSentence}
               disabled={currentSentenceIndex <= 0}
-              title="Previous Sentence (Arrow Left)"
-              className={`p-2 rounded-full transition-all ${
+              title="Câu trước đó (Mũi tên trái)"
+              aria-label="Câu trước đó"
+              className={`min-w-[44px] min-h-[44px] flex items-center justify-center p-2 rounded-full transition-all touch-manipulation cursor-pointer ${
                 currentSentenceIndex <= 0
                   ? 'opacity-20 cursor-not-allowed text-slate-500'
                   : 'text-slate-400 hover:text-white active:scale-95'
@@ -96,9 +98,11 @@ export const ControlBar: React.FC<ControlBarProps> = ({
             {/* Main Play / Pause Button */}
             <button
               id="tts-play-pause-btn"
+              type="button"
               onClick={onTogglePlay}
-              title={isPlaying && !isPaused ? 'Pause (Space)' : 'Play (Space)'}
-              className="w-10 h-10 rounded-full bg-white hover:bg-slate-100 active:scale-95 text-black flex items-center justify-center shadow-lg transition-all cursor-pointer"
+              title={isPlaying && !isPaused ? 'Tạm dừng (Phím Space)' : 'Phát tiếp (Phím Space)'}
+              aria-label={isPlaying && !isPaused ? 'Tạm dừng' : 'Phát tiếp'}
+              className="w-11 h-11 min-w-[44px] min-h-[44px] rounded-full bg-amber-600 hover:bg-amber-500 active:scale-95 text-black flex items-center justify-center shadow-lg shadow-amber-500/25 transition-all cursor-pointer touch-manipulation"
             >
               {isPlaying && !isPaused ? (
                 <Pause className="w-4 h-4 fill-black text-black" />
@@ -110,10 +114,12 @@ export const ControlBar: React.FC<ControlBarProps> = ({
             {/* Next Sentence */}
             <button
               id="tts-next-sentence-btn"
+              type="button"
               onClick={onNextSentence}
               disabled={currentSentenceIndex >= totalSentences - 1}
-              title="Next Sentence (Arrow Right)"
-              className={`p-2 rounded-full transition-all ${
+              title="Câu kế tiếp (Mũi tên phải)"
+              aria-label="Câu kế tiếp"
+              className={`min-w-[44px] min-h-[44px] flex items-center justify-center p-2 rounded-full transition-all touch-manipulation cursor-pointer ${
                 currentSentenceIndex >= totalSentences - 1
                   ? 'opacity-20 cursor-not-allowed text-slate-500'
                   : 'text-slate-400 hover:text-white active:scale-95'
@@ -161,17 +167,19 @@ export const ControlBar: React.FC<ControlBarProps> = ({
           </div>
 
           {/* Right Action Icons */}
-          <div className="flex items-center gap-2 border-l border-white/10 pl-3">
+          <div className="flex items-center gap-1 sm:gap-2 border-l border-white/10 pl-2 sm:pl-3 shrink-0">
             {/* Speed Quick Selector */}
             <div className="relative">
               <button
                 id="tts-speed-badge-btn"
+                type="button"
                 onClick={() => {
                   setShowSpeedPopup(!showSpeedPopup);
                   setShowVolumePopup(false);
                 }}
-                title="Playback Rate"
-                className={`px-2 py-1 rounded-lg text-xs font-mono font-medium transition-colors ${
+                title="Tốc độ giọng đọc"
+                aria-label="Tốc độ giọng đọc"
+                className={`min-w-[44px] min-h-[44px] flex items-center justify-center px-2 py-1 rounded-lg text-xs font-mono font-medium transition-colors touch-manipulation cursor-pointer ${
                   isDark ? 'text-amber-500 hover:bg-white/5' : 'text-amber-800 bg-amber-100'
                 }`}
               >
@@ -193,11 +201,12 @@ export const ControlBar: React.FC<ControlBarProps> = ({
                   {speedOptions.map(rate => (
                     <button
                       key={rate}
+                      type="button"
                       onClick={() => {
                         onUpdateSettings({ rate });
                         setShowSpeedPopup(false);
                       }}
-                      className={`text-left px-2.5 py-1.5 rounded-lg text-xs font-mono font-medium flex items-center justify-between transition-colors ${
+                      className={`text-left px-2.5 py-1.5 rounded-lg text-xs font-mono font-medium flex items-center justify-between transition-colors cursor-pointer ${
                         settings.rate === rate
                           ? 'bg-amber-600 text-black font-bold'
                           : isDark
@@ -217,12 +226,14 @@ export const ControlBar: React.FC<ControlBarProps> = ({
             <div className="relative">
               <button
                 id="tts-volume-btn"
+                type="button"
                 onClick={() => {
                   setShowVolumePopup(!showVolumePopup);
                   setShowSpeedPopup(false);
                 }}
-                title="Volume"
-                className={`p-1.5 rounded-lg transition-colors ${
+                title="Âm lượng"
+                aria-label="Âm lượng"
+                className={`min-w-[44px] min-h-[44px] flex items-center justify-center p-1.5 rounded-lg transition-colors touch-manipulation cursor-pointer ${
                   isDark
                     ? 'text-slate-400 hover:text-white hover:bg-white/5'
                     : 'hover:bg-neutral-100 text-neutral-700'
@@ -245,8 +256,10 @@ export const ControlBar: React.FC<ControlBarProps> = ({
                   }`}
                 >
                   <button
+                    type="button"
                     onClick={() => onUpdateSettings({ volume: settings.volume === 0 ? 1.0 : 0 })}
-                    className="p-1 text-slate-400 hover:text-amber-500"
+                    aria-label="Bật/Tắt tiếng"
+                    className="p-1 text-slate-400 hover:text-amber-500 cursor-pointer"
                   >
                     {settings.volume === 0 ? (
                       <VolumeX className="w-4 h-4" />
@@ -274,9 +287,11 @@ export const ControlBar: React.FC<ControlBarProps> = ({
             {onOpenScreenReaderGuide && (
               <button
                 id="dock-screen-reader-btn"
+                type="button"
                 onClick={onOpenScreenReaderGuide}
                 title="Đọc màn hình (Ctrl+Shift+Space)"
-                className={`p-1.5 rounded-lg transition-colors ${
+                aria-label="Đọc màn hình"
+                className={`min-w-[44px] min-h-[44px] flex items-center justify-center p-1.5 rounded-lg transition-colors touch-manipulation cursor-pointer ${
                   isDark
                     ? 'text-slate-400 hover:text-white hover:bg-white/5'
                     : 'hover:bg-neutral-100 text-neutral-700'
@@ -289,9 +304,11 @@ export const ControlBar: React.FC<ControlBarProps> = ({
             {/* Chapters / TOC Button */}
             <button
               id="dock-toc-btn"
+              type="button"
               onClick={onOpenTOC}
-              title="Table of Contents"
-              className={`p-1.5 rounded-lg transition-colors ${
+              title="Mục lục chương"
+              aria-label="Mục lục chương"
+              className={`min-w-[44px] min-h-[44px] flex items-center justify-center p-1.5 rounded-lg transition-colors touch-manipulation cursor-pointer ${
                 isDark
                   ? 'text-slate-400 hover:text-white hover:bg-white/5'
                   : 'hover:bg-neutral-100 text-neutral-700'
@@ -303,9 +320,11 @@ export const ControlBar: React.FC<ControlBarProps> = ({
             {/* Settings Gear Button */}
             <button
               id="tts-open-settings-btn"
+              type="button"
               onClick={onOpenSettings}
-              title="Voice & Reader Settings"
-              className={`p-1.5 rounded-lg transition-colors ${
+              title="Cài đặt giọng đọc & Giao diện"
+              aria-label="Cài đặt giọng đọc & Giao diện"
+              className={`min-w-[44px] min-h-[44px] flex items-center justify-center p-1.5 rounded-lg transition-colors touch-manipulation cursor-pointer ${
                 isDark
                   ? 'text-slate-400 hover:text-amber-500 hover:bg-white/5'
                   : 'hover:bg-amber-100 text-neutral-800'

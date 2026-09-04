@@ -157,7 +157,7 @@ export const BookmarksDrawer: React.FC<BookmarksDrawerProps> = ({
               <input
                 type="text"
                 autoFocus
-                placeholder="Add an optional note (e.g. Favorite quote, key clue)..."
+                placeholder="Thêm ghi chú tuỳ chọn (ví dụ: Trích dẫn hay, tình tiết quan trọng)..."
                 value={newBookmarkNote}
                 onChange={e => setNewBookmarkNote(e.target.value)}
                 className="w-full px-3 py-1.5 bg-white/5 border border-white/10 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
@@ -168,13 +168,13 @@ export const BookmarksDrawer: React.FC<BookmarksDrawerProps> = ({
                   onClick={() => setShowAddForm(false)}
                   className="px-2.5 py-1 text-xs text-slate-400 hover:text-white"
                 >
-                  Cancel
+                  Huỷ
                 </button>
                 <button
                   type="submit"
                   className="px-3 py-1 bg-amber-600 hover:bg-amber-500 text-black text-xs font-bold rounded-lg transition-colors"
                 >
-                  Save Bookmark
+                  Lưu dấu trang
                 </button>
               </div>
             </form>
@@ -187,7 +187,7 @@ export const BookmarksDrawer: React.FC<BookmarksDrawerProps> = ({
             <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="Search in bookmarked text or notes..."
+              placeholder="Tìm trong đoạn trích hoặc ghi chú đánh dấu..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               className="w-full pl-8 pr-3 py-1.5 bg-white/5 border border-white/10 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
@@ -299,20 +299,24 @@ export const BookmarksDrawer: React.FC<BookmarksDrawerProps> = ({
                         autoFocus
                         value={editNoteText}
                         onChange={e => setEditNoteText(e.target.value)}
-                        placeholder="Edit note..."
+                        placeholder="Chỉnh sửa ghi chú..."
                         className="flex-1 px-2.5 py-1 bg-white/10 border border-white/20 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
                       />
                       <button
+                        type="button"
                         onClick={() => handleSaveEdit(bm.id)}
-                        className="p-1.5 bg-amber-600 hover:bg-amber-500 text-black rounded-lg transition-colors"
-                        title="Save note"
+                        className="p-1.5 bg-amber-600 hover:bg-amber-500 text-black rounded-lg transition-colors cursor-pointer"
+                        title="Lưu ghi chú"
+                        aria-label="Lưu ghi chú"
                       >
                         <Check className="w-3.5 h-3.5" />
                       </button>
                       <button
+                        type="button"
                         onClick={() => setEditingId(null)}
-                        className="p-1.5 text-slate-400 hover:text-white"
-                        title="Cancel"
+                        className="p-1.5 text-slate-400 hover:text-white cursor-pointer"
+                        title="Huỷ"
+                        aria-label="Huỷ chỉnh sửa ghi chú"
                       >
                         <X className="w-3.5 h-3.5" />
                       </button>

@@ -102,7 +102,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onDoc
 
       const newDoc: DocumentItem = {
         id: `doc-${Date.now()}`,
-        title: docTitle || 'Imported Document',
+        title: docTitle || 'Tài liệu đã nhập',
         author: docAuthor,
         format,
         chapters,
@@ -129,7 +129,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onDoc
       setErrorMessage(
         err instanceof Error
           ? err.message
-          : 'Failed to process document file. Please ensure it is a valid TXT, PDF, or EPUB file.'
+          : 'Không thể xử lý tệp tài liệu. Vui lòng đảm bảo tệp định dạng TXT, PDF hoặc EPUB hợp lệ.'
       );
     } finally {
       setIsLoading(false);
@@ -149,11 +149,11 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onDoc
 
   const handlePastedSubmit = () => {
     if (!pastedContent.trim()) {
-      setErrorMessage('Please paste or write some novel text.');
+      setErrorMessage('Vui lòng dán hoặc nhập nội dung văn bản tiểu thuyết.');
       return;
     }
 
-    const title = pastedTitle.trim() || 'Untitled Story';
+    const title = pastedTitle.trim() || 'Tác phẩm mới';
     const chapters = parseNovelText(pastedContent, title);
     const totalWords = chapters.reduce((acc, c) => acc + c.wordCount, 0);
     const totalSentences = chapters.reduce((acc, c) => acc + c.totalSentences, 0);
@@ -271,15 +271,17 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onDoc
               <Upload className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-neutral-100">Add Novel or Document</h2>
+              <h2 className="text-lg font-bold text-neutral-100">Thêm tiểu thuyết & tài liệu</h2>
               <p className="text-xs text-neutral-400">
-                Upload files (.txt, .pdf, .epub) or paste text directly
+                Tải tệp (.txt, .pdf, .epub) hoặc dán trực tiếp nội dung văn bản
               </p>
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="p-2 rounded-xl text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors"
+            aria-label="Đóng hộp thoại tải sách"
+            className="p-2 rounded-xl text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -288,45 +290,49 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onDoc
         {/* Tab switcher */}
         <div className="flex px-6 pt-3 border-b border-neutral-800 gap-2 bg-neutral-950/40">
           <button
+            type="button"
             onClick={() => setActiveTab('upload')}
-            className={`px-4 py-2.5 rounded-t-xl text-sm font-medium flex items-center space-x-2 transition-colors border-b-2 ${
+            className={`px-4 py-2.5 rounded-t-xl text-sm font-medium flex items-center space-x-2 transition-colors border-b-2 cursor-pointer ${
               activeTab === 'upload'
                 ? 'border-amber-500 text-amber-400 bg-neutral-800/60'
                 : 'border-transparent text-neutral-400 hover:text-neutral-200'
             }`}
           >
             <FileText className="w-4 h-4" />
-            <span>Upload File</span>
+            <span>Tải tệp</span>
           </button>
 
           <button
+            type="button"
             onClick={() => setActiveTab('paste')}
-            className={`px-4 py-2.5 rounded-t-xl text-sm font-medium flex items-center space-x-2 transition-colors border-b-2 ${
+            className={`px-4 py-2.5 rounded-t-xl text-sm font-medium flex items-center space-x-2 transition-colors border-b-2 cursor-pointer ${
               activeTab === 'paste'
                 ? 'border-amber-500 text-amber-400 bg-neutral-800/60'
                 : 'border-transparent text-neutral-400 hover:text-neutral-200'
             }`}
           >
             <Clipboard className="w-4 h-4" />
-            <span>Paste Text</span>
+            <span>Dán văn bản</span>
           </button>
 
           <button
+            type="button"
             onClick={() => setActiveTab('samples')}
-            className={`px-4 py-2.5 rounded-t-xl text-sm font-medium flex items-center space-x-2 transition-colors border-b-2 ${
+            className={`px-4 py-2.5 rounded-t-xl text-sm font-medium flex items-center space-x-2 transition-colors border-b-2 cursor-pointer ${
               activeTab === 'samples'
                 ? 'border-amber-500 text-amber-400 bg-neutral-800/60'
                 : 'border-transparent text-neutral-400 hover:text-neutral-200'
             }`}
           >
             <Sparkles className="w-4 h-4" />
-            <span>Classic Library</span>
+            <span>Thư viện mẫu</span>
           </button>
 
           <button
+            type="button"
             onClick={() => setActiveTab('url')}
             id="tab-url-btn"
-            className={`px-4 py-2.5 rounded-t-xl text-sm font-medium flex items-center space-x-2 transition-colors border-b-2 ${
+            className={`px-4 py-2.5 rounded-t-xl text-sm font-medium flex items-center space-x-2 transition-colors border-b-2 cursor-pointer ${
               activeTab === 'url'
                 ? 'border-amber-500 text-amber-400 bg-neutral-800/60'
                 : 'border-transparent text-neutral-400 hover:text-neutral-200'
@@ -340,9 +346,19 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onDoc
         {/* Body */}
         <div className="flex-1 overflow-y-auto p-6">
           {errorMessage && (
-            <div className="mb-4 p-3 rounded-xl bg-red-950/50 border border-red-800/80 text-red-300 text-xs flex items-center space-x-2">
-              <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
-              <span>{errorMessage}</span>
+            <div className="mb-4 p-3 rounded-xl bg-red-950/50 border border-red-800/80 text-red-300 text-xs flex items-center justify-between gap-2 shadow-sm animate-in fade-in duration-200">
+              <div className="flex items-center space-x-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
+                <span>{errorMessage}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setErrorMessage(null)}
+                className="p-1 rounded-lg hover:bg-red-900/40 text-red-400 hover:text-red-200 transition-colors cursor-pointer"
+                aria-label="Đóng thông báo lỗi"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
             </div>
           )}
 
@@ -382,7 +398,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onDoc
                   >
                     <Loader2 className="w-10 h-10 text-amber-500 animate-spin" />
                     <div className="text-sm font-semibold text-neutral-200">
-                      Processing Document ({progress}%)...
+                      Đang xử lý tài liệu ({progress}%)...
                     </div>
                     <div className="w-48 h-1.5 bg-neutral-800 rounded-full overflow-hidden">
                       <div
@@ -411,18 +427,18 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onDoc
                     </div>
                     <div>
                       <div className="text-sm font-bold text-neutral-100">
-                        Drag and drop your file here, or click to browse
+                        Kéo thả tệp vào đây hoặc nhấp để duyệt tìm
                       </div>
                       <p className="text-xs text-neutral-400 mt-1">
-                        Supports <span className="text-amber-400 font-mono">.txt</span>,{' '}
+                        Hỗ trợ <span className="text-amber-400 font-mono">.txt</span>,{' '}
                         <span className="text-amber-400 font-mono">.pdf</span>,{' '}
                         <span className="text-amber-400 font-mono">.epub</span>,{' '}
                         <span className="text-amber-400 font-mono">.md</span> (Tối đa{' '}
                         {MAX_FILE_SIZE_MB}MB)
                       </p>
                     </div>
-                    <div className="inline-block px-3 py-1.5 rounded-lg bg-neutral-800 border border-neutral-700 text-xs text-neutral-300 font-medium">
-                      Select File From Device
+                    <div className="inline-block px-3.5 py-2 rounded-xl bg-neutral-800 border border-neutral-700 text-xs text-neutral-300 font-medium hover:bg-neutral-700 transition-colors">
+                      Chọn tệp từ thiết bị
                     </div>
                   </>
                 )}
@@ -431,16 +447,16 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onDoc
               {/* Supported format badges */}
               <div className="grid grid-cols-3 gap-3 text-center text-xs">
                 <div className="p-2.5 rounded-xl bg-neutral-800/40 border border-neutral-700/60">
-                  <span className="font-bold text-neutral-200 block">Plain Text (.txt, .md)</span>
-                  <span className="text-[11px] text-neutral-400">Fast parsing & UTF-8</span>
+                  <span className="font-bold text-neutral-200 block">Văn bản thô (.txt, .md)</span>
+                  <span className="text-[11px] text-neutral-400">Xử lý nhanh & chuẩn UTF-8</span>
                 </div>
                 <div className="p-2.5 rounded-xl bg-neutral-800/40 border border-neutral-700/60">
-                  <span className="font-bold text-neutral-200 block">PDF Documents</span>
-                  <span className="text-[11px] text-neutral-400">Client-side OCR & pages</span>
+                  <span className="font-bold text-neutral-200 block">Tài liệu PDF</span>
+                  <span className="text-[11px] text-neutral-400">Trích xuất trang & văn bản</span>
                 </div>
                 <div className="p-2.5 rounded-xl bg-neutral-800/40 border border-neutral-700/60">
-                  <span className="font-bold text-neutral-200 block">EPUB Ebooks</span>
-                  <span className="text-[11px] text-neutral-400">Chapters & spine auto-split</span>
+                  <span className="font-bold text-neutral-200 block">Sách EPUB</span>
+                  <span className="text-[11px] text-neutral-400">Tự động phân tách chương</span>
                 </div>
               </div>
             </div>
@@ -452,11 +468,11 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onDoc
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-semibold text-neutral-300 block mb-1">
-                    Document Title (Optional)
+                    Tiêu đề tác phẩm (không bắt buộc)
                   </label>
                   <input
                     type="text"
-                    placeholder="e.g. My Web Novel - Chapter 1"
+                    placeholder="Ví dụ: Dế Mèn Phiêu Lưu Ký - Chương 1"
                     value={pastedTitle}
                     onChange={e => setPastedTitle(e.target.value)}
                     className="w-full px-3 py-2 bg-neutral-800/80 border border-neutral-700 rounded-xl text-xs text-neutral-100 placeholder-neutral-500 focus:outline-none focus:border-amber-500"
@@ -464,11 +480,11 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onDoc
                 </div>
                 <div>
                   <label className="text-xs font-semibold text-neutral-300 block mb-1">
-                    Author (Optional)
+                    Tác giả (không bắt buộc)
                   </label>
                   <input
                     type="text"
-                    placeholder="e.g. Nam Cao / Arthur Conan Doyle"
+                    placeholder="Ví dụ: Tô Hoài / Nam Cao"
                     value={pastedAuthor}
                     onChange={e => setPastedAuthor(e.target.value)}
                     className="w-full px-3 py-2 bg-neutral-800/80 border border-neutral-700 rounded-xl text-xs text-neutral-100 placeholder-neutral-500 focus:outline-none focus:border-amber-500"
@@ -479,16 +495,16 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onDoc
               <div>
                 <div className="flex justify-between items-center mb-1">
                   <label className="text-xs font-semibold text-neutral-300">
-                    Novel / Article Text Content
+                    Nội dung văn bản / tiểu thuyết
                   </label>
                   <span className="text-[11px] font-mono text-neutral-400">
-                    {pastedContent.split(/\s+/).filter(Boolean).length} words |{' '}
-                    {pastedContent.length} chars
+                    {pastedContent.split(/\s+/).filter(Boolean).length} từ |{' '}
+                    {pastedContent.length} ký tự
                   </span>
                 </div>
                 <textarea
                   rows={8}
-                  placeholder="Paste your text or chapters here... You can use 'Chapter 1', 'Chương 1', or headings to automatically divide into navigable chapters!"
+                  placeholder="Dán hoặc nhập nội dung văn bản tại đây... Bạn có thể dùng 'Chương 1', 'Hồi 1', 'Chapter 1' hoặc các tiêu đề để hệ thống tự động tách chương thuận tiện khi đọc!"
                   value={pastedContent}
                   onChange={e => setPastedContent(e.target.value)}
                   className="w-full p-3.5 bg-neutral-950/70 border border-neutral-700 rounded-xl text-xs text-neutral-200 font-serif leading-relaxed placeholder-neutral-600 focus:outline-none focus:border-amber-500"
@@ -497,13 +513,15 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onDoc
 
               <div className="flex justify-end">
                 <button
+                  type="button"
                   id="submit-pasted-text-btn"
                   onClick={handlePastedSubmit}
                   disabled={!pastedContent.trim()}
-                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-xs flex items-center space-x-1.5 shadow-lg shadow-amber-500/20 transition-all cursor-pointer"
+                  className="min-h-[44px] px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-xs flex items-center space-x-1.5 shadow-lg shadow-amber-500/20 transition-all cursor-pointer touch-manipulation"
+                  aria-label="Phân tích văn bản và bắt đầu đọc"
                 >
                   <FileCode className="w-4 h-4" />
-                  <span>Parse & Start Reading</span>
+                  <span>Phân tích & Bắt đầu đọc</span>
                 </button>
               </div>
             </div>
@@ -513,8 +531,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onDoc
           {activeTab === 'samples' && (
             <div className="space-y-3">
               <p className="text-xs text-neutral-400">
-                Choose a preloaded classic book or Vietnamese story to test TTS audio synthesis
-                immediately:
+                Chọn một tác phẩm văn học kinh điển hoặc truyện mẫu để trải nghiệm giọng đọc TTS ngay lập tức:
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {SAMPLE_DOCUMENTS.map(doc => (
@@ -524,7 +541,16 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onDoc
                       onDocumentLoaded(doc);
                       onClose();
                     }}
-                    className="p-4 rounded-2xl bg-neutral-800/50 hover:bg-neutral-800 border border-neutral-700/70 hover:border-amber-500/60 cursor-pointer transition-all flex flex-col justify-between group"
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        onDocumentLoaded(doc);
+                        onClose();
+                      }
+                    }}
+                    aria-label={`Đọc tác phẩm ${doc.title}`}
+                    className="p-4 rounded-2xl bg-neutral-800/50 hover:bg-neutral-800 border border-neutral-700/70 hover:border-amber-500/60 cursor-pointer transition-all flex flex-col justify-between group focus:outline-none focus:border-amber-500"
                   >
                     <div>
                       <div className="flex items-center justify-between">
@@ -532,7 +558,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onDoc
                           {doc.format.toUpperCase()}
                         </span>
                         <span className="text-xs text-neutral-500 font-mono">
-                          {doc.chapters.length} {doc.chapters.length === 1 ? 'Chapter' : 'Chapters'}
+                          {doc.chapters.length} {doc.chapters.length === 1 ? 'chương' : 'chương'}
                         </span>
                       </div>
                       <h4 className="font-bold text-sm text-neutral-100 group-hover:text-amber-400 transition-colors mt-2">
@@ -544,9 +570,9 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onDoc
                     </div>
 
                     <div className="mt-3 pt-2 border-t border-neutral-700/50 flex items-center justify-between text-[11px] text-neutral-400">
-                      <span>{doc.totalWords.toLocaleString()} words</span>
+                      <span>{doc.totalWords.toLocaleString()} từ</span>
                       <span className="text-amber-400 font-medium group-hover:underline flex items-center space-x-1">
-                        <span>Read now</span>
+                        <span>Đọc ngay</span>
                         <BookOpen className="w-3 h-3" />
                       </span>
                     </div>

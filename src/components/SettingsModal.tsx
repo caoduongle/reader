@@ -19,6 +19,8 @@ import {
   Server,
   AlertCircle,
   RefreshCw,
+  Phone,
+  Mail,
 } from 'lucide-react';
 import {
   TTSSettings,
@@ -196,9 +198,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           </div>
           <button
+            type="button"
             id="close-settings-btn"
             onClick={onClose}
-            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+            aria-label="Đóng bảng cài đặt"
+            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -207,42 +211,45 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         {/* Tab Navigation */}
         <div className="flex px-6 pt-3 border-b border-white/10 gap-2 bg-[#0A0A0B]">
           <button
+            type="button"
             id="tab-voice-settings"
             onClick={() => setActiveTab('voice')}
-            className={`px-4 py-2.5 rounded-t-xl text-xs font-semibold flex items-center space-x-2 transition-colors border-b-2 ${
+            className={`px-4 py-2.5 rounded-t-xl text-xs font-semibold flex items-center space-x-2 transition-colors border-b-2 cursor-pointer ${
               activeTab === 'voice'
                 ? 'border-amber-500 text-amber-400 bg-[#16161A]'
                 : 'border-transparent text-slate-400 hover:text-white'
             }`}
           >
             <Volume2 className="w-4 h-4" />
-            <span>Voice & Speed</span>
+            <span>Giọng đọc & Tốc độ</span>
           </button>
 
           <button
+            type="button"
             id="tab-reading-settings"
             onClick={() => setActiveTab('reading')}
-            className={`px-4 py-2.5 rounded-t-xl text-xs font-semibold flex items-center space-x-2 transition-colors border-b-2 ${
+            className={`px-4 py-2.5 rounded-t-xl text-xs font-semibold flex items-center space-x-2 transition-colors border-b-2 cursor-pointer ${
               activeTab === 'reading'
                 ? 'border-amber-500 text-amber-400 bg-[#16161A]'
                 : 'border-transparent text-slate-400 hover:text-white'
             }`}
           >
             <Type className="w-4 h-4" />
-            <span>Typography & Theme</span>
+            <span>Phông chữ & Giao diện</span>
           </button>
 
           <button
+            type="button"
             id="tab-mascot-settings"
             onClick={() => setActiveTab('mascot')}
-            className={`px-4 py-2.5 rounded-t-xl text-xs font-semibold flex items-center space-x-2 transition-colors border-b-2 ${
+            className={`px-4 py-2.5 rounded-t-xl text-xs font-semibold flex items-center space-x-2 transition-colors border-b-2 cursor-pointer ${
               activeTab === 'mascot'
                 ? 'border-amber-500 text-amber-400 bg-[#16161A]'
                 : 'border-transparent text-slate-400 hover:text-white'
             }`}
           >
             <Sparkles className="w-4 h-4" />
-            <span>Mascot & Animations</span>
+            <span>Linh vật đồng hành</span>
           </button>
         </div>
 
@@ -553,7 +560,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <input
                         id="voice-search-input"
                         type="text"
-                        placeholder="Search voice name or language (e.g., Natural, Vietnamese, English, Google)..."
+                        placeholder="Tìm kiếm tên giọng đọc hoặc ngôn ngữ (ví dụ: Tiếng Việt, HoaiMy, NamMinh, English)..."
                         value={voiceSearch}
                         onChange={e => setVoiceSearch(e.target.value)}
                         className="w-full pl-9 pr-3 py-2 bg-white/5 border border-white/10 rounded-xl text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-500"
@@ -1195,36 +1202,65 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           )}
         </div>
 
+        {/* Support & Contact Row */}
+        <div className="px-6 py-3 bg-[#121215] border-t border-white/5 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-400 select-none">
+          <div className="flex flex-wrap items-center gap-4">
+            <span className="text-slate-500 font-medium">Hỗ trợ kỹ thuật:</span>
+            <a
+              href="tel:+84987654321"
+              className="inline-flex items-center gap-1.5 text-slate-300 hover:text-amber-400 transition-colors py-1 focus:outline-none focus:underline"
+              aria-label="Gọi điện thoại hỗ trợ 0987 654 321"
+            >
+              <Phone className="w-3.5 h-3.5 text-amber-500" />
+              <span>0987 654 321</span>
+            </a>
+            <a
+              href="mailto:support@voxread.app"
+              className="inline-flex items-center gap-1.5 text-slate-300 hover:text-amber-400 transition-colors py-1 focus:outline-none focus:underline"
+              aria-label="Gửi email hỗ trợ tới support@voxread.app"
+            >
+              <Mail className="w-3.5 h-3.5 text-amber-500" />
+              <span>support@voxread.app</span>
+            </a>
+          </div>
+          <span className="text-slate-500 text-[11px]">
+            © {new Date().getFullYear()} VoxRead. Giữ toàn quyền.
+          </span>
+        </div>
+
         {/* Modal Footer */}
         <div className="flex items-center justify-between px-6 py-4 border-t border-white/10 bg-[#16161A]">
           <button
+            type="button"
             onClick={() => setLocalSettings(settings)}
-            className="px-4 py-2 text-xs text-slate-400 hover:text-white transition-colors cursor-pointer"
+            className="min-h-[44px] px-4 py-2 text-xs text-slate-400 hover:text-white transition-colors cursor-pointer touch-manipulation"
           >
-            Reset to Previous
+            Khôi phục mặc định
           </button>
 
           <div className="flex items-center space-x-3">
             <button
+              type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:bg-white/10 transition-colors cursor-pointer"
+              className="min-h-[44px] px-4 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:bg-white/10 transition-colors cursor-pointer touch-manipulation"
             >
-              Cancel
+              Đóng
             </button>
             <button
+              type="button"
               id="save-tts-settings-btn"
               onClick={handleSave}
-              className="px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 active:scale-95 text-black font-bold text-xs flex items-center space-x-1.5 shadow-lg shadow-amber-500/20 transition-all cursor-pointer"
+              className="min-h-[44px] px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 active:scale-95 text-black font-bold text-xs flex items-center space-x-1.5 shadow-lg shadow-amber-500/20 transition-all cursor-pointer touch-manipulation"
             >
               {showSavedFeedback ? (
                 <>
                   <Check className="w-4 h-4" />
-                  <span>Saved!</span>
+                  <span>Đã lưu!</span>
                 </>
               ) : (
                 <>
                   <Save className="w-4 h-4" />
-                  <span>Save Settings</span>
+                  <span>Lưu cài đặt</span>
                 </>
               )}
             </button>
