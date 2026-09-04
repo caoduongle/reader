@@ -13,14 +13,28 @@ const HOST = '127.0.0.1'; // BIND STRICTLY TO 127.0.0.1 (SECURITY)
 
 app.use(express.json());
 
-// CORS configuration for local development
+// Whitelist of trusted origins allowed to access proxy routes
+// 'null' is the serialized Origin header sent by Chromium/Electron when loading pages via file:// in packaged builds
+const ALLOWED_ORIGINS = new Set([
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  'null',
+]);
+
+// CORS configuration enforcing origin whitelist
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  const origin = req.headers.origin;
+
+  if (origin && ALLOWED_ORIGINS.has(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type');
+  }
+
   if (req.method === 'OPTIONS') {
     return res.sendStatus(204);
   }
+
   next();
 });
 
