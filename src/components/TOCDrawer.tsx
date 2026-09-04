@@ -99,3 +99,5 @@ export const TOCDrawer: React.FC<TOCDrawerProps> = ({
     </div>
   );
 };
+
+export default TOCDrawer;

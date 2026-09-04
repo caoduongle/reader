@@ -125,3 +125,5 @@ export const SearchDrawer: React.FC<SearchDrawerProps> = ({
     </div>
   );
 };
+
+export default SearchDrawer;

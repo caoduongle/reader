@@ -648,3 +648,5 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onDoc
     </div>
   );
 };
+
+export default UploadModal;

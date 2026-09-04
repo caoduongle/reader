@@ -387,3 +387,5 @@ export const BookmarksDrawer: React.FC<BookmarksDrawerProps> = ({
     </div>
   );
 };
+
+export default BookmarksDrawer;

@@ -1,0 +1,8 @@
+# Robots.txt for VoxRead (https://voxread.app)
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /dist-electron/
+
+# Sitemap location
+Sitemap: https://voxread.app/sitemap.xml

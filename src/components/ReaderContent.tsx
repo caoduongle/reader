@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { sanitizeForRender } from '../utils/clientSanitizer';
+import { BreadcrumbNav } from './BreadcrumbNav';
 
 interface ReaderContentProps {
   currentChapter: Chapter | null;
@@ -23,6 +24,7 @@ interface ReaderContentProps {
   isPlaying: boolean;
   isPaused: boolean;
   settings: TTSSettings;
+  documentTitle?: string;
   bookmarkedSentenceIndices?: Set<number>;
   onSentenceClick: (sentence: SentenceItem) => void;
   onToggleBookmarkSentence?: (sentence: SentenceItem) => void;
@@ -40,6 +42,7 @@ export const ReaderContent: React.FC<ReaderContentProps> = ({
   totalChapters,
   currentSentenceIndex,
   settings,
+  documentTitle,
   bookmarkedSentenceIndices = new Set(),
   onSentenceClick,
   onPrevChapter,
@@ -142,6 +145,15 @@ export const ReaderContent: React.FC<ReaderContentProps> = ({
       }}
     >
       <div className={`mx-auto ${widthClasses} transition-all duration-200`}>
+        {/* Breadcrumbs */}
+        <div className="mb-6 flex justify-center">
+          <BreadcrumbNav
+            documentTitle={documentTitle || currentChapter.title}
+            chapterTitle={`Chương ${chapterIndex + 1} / ${totalChapters}`}
+            onOpenTOC={onOpenTOC}
+          />
+        </div>
+
         {/* Chapter Header */}
         <header className="mb-10 text-center select-none">
           <h2 className="text-3xl md:text-4xl font-serif text-white mb-2 italic tracking-tight">

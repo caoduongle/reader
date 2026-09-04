@@ -15,6 +15,34 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       sourcemap: false,
+      chunkSizeWarningLimit: 700,
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('node_modules')) {
+              if (id.includes('recharts')) {
+                return 'vendor-charts';
+              }
+              if (id.includes('pdfjs-dist')) {
+                return 'vendor-pdf';
+              }
+              if (id.includes('jszip')) {
+                return 'vendor-epub';
+              }
+              if (
+                id.includes('lucide-react') ||
+                id.includes('motion') ||
+                id.includes('canvas-confetti')
+              ) {
+                return 'vendor-ui';
+              }
+              if (id.includes('react') || id.includes('react-dom')) {
+                return 'vendor-react';
+              }
+            }
+          },
+        },
+      },
     },
     esbuild: {
       drop: isProd ? ['console', 'debugger'] : [],

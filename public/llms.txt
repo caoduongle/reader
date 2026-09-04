@@ -1,0 +1,23 @@
+# VoxRead
+> Modern AI Text-to-Speech (TTS) Novel & Document Reader with RVC Voice Cloning and Synchronized Karaoke Highlighting.
+
+## Overview
+VoxRead is an accessible, desktop-friendly and web-based reader application designed for long-form reading, fiction, and document listening.
+
+## Key Capabilities
+- **Local AI TTS & RVC**: Integrates Microsoft Edge-TTS with Retrieval-based Voice Conversion (RVC) for realistic speech synthesis.
+- **Karaoke Highlighting**: Synchronized, sentence-by-sentence reading highlight with smooth autoscroll.
+- **Multi-Format Support**: Native client-side parsing for EPUB, PDF, and TXT files.
+- **Offline Storage**: IndexedDB persistence for books, chapters, reading bookmarks, and statistics.
+- **Vision OCR**: Google Gemini AI vision integration for extracting readable text from screenshots and scanned images.
+- **Accessible & Ambient**: Comprehensive themes (Dark, Midnight, Sepia, Paper, Forest), dyslexic-friendly typography, and keyboard navigation.
+
+## Technical Architecture
+- **Frontend**: React 19, TypeScript, Tailwind CSS, Vite
+- **Backend / Proxy**: Node.js Express 4 with Helmet, Argon2, and strict CSP
+- **TTS Engine**: Python 3.10 with Edge-TTS and RVC inference
+
+## Public URLs & Resources
+- **Homepage**: https://voxread.app/
+- **Documentation & Sitemaps**: https://voxread.app/sitemap.xml
+- **Repository**: https://github.com/caoduongle/reader

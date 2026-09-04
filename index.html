@@ -3,28 +3,80 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>VoxRead - TTS Novel & Document Reader</title>
+    <title>VoxRead - Đọc Truyện &amp; Tài Liệu Thông Minh Bằng Giọng Nói AI</title>
     <meta
       name="description"
-      content="Modern desktop-friendly Text-to-Speech (TTS) novel and document reader with interactive mascot, synchronized karaoke sentence highlighting, and multi-format support."
+      content="Ứng dụng đọc truyện và tài liệu văn bản bằng giọng nói AI thông minh (TTS), hỗ trợ karaoke highlight câu đọc, RVC voice clone và đa định dạng EPUB, PDF, TXT."
     />
     <meta name="keywords" content="voxread, tts reader, rvc voice, doc truyen bang giong noi, epub reader, pdf reader" />
     <meta name="theme-color" content="#0D0D0F" />
     <meta name="robots" content="index, follow" />
-    <link
-      rel="icon"
-      type="image/svg+xml"
-      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='24' fill='%23d97706'/><text y='70' x='50' text-anchor='middle' font-size='60'>📖</text></svg>"
-    />
-    <meta property="og:title" content="VoxRead - TTS Novel & Document Reader" />
+    <link rel="canonical" href="https://voxread.app/" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="alternate icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://voxread.app/" />
+    <meta property="og:title" content="VoxRead - Đọc Truyện &amp; Tài Liệu Thông Minh Bằng Giọng Nói AI" />
     <meta
       property="og:description"
-      content="Modern desktop-friendly Text-to-Speech (TTS) novel and document reader with interactive mascot, synchronized karaoke sentence highlighting, and multi-format support."
+      content="Ứng dụng đọc truyện và tài liệu văn bản bằng giọng nói AI thông minh (TTS), hỗ trợ karaoke highlight câu đọc, RVC voice clone và đa định dạng EPUB, PDF, TXT."
     />
-    <meta property="og:type" content="website" />
+    <meta property="og:image" content="https://voxread.app/og-preview.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
     <meta property="og:locale" content="vi_VN" />
     <meta property="og:site_name" content="VoxRead" />
+
+    <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="VoxRead - Đọc Truyện &amp; Tài Liệu Thông Minh Bằng Giọng Nói AI" />
+    <meta
+      name="twitter:description"
+      content="Ứng dụng đọc truyện và tài liệu văn bản bằng giọng nói AI thông minh (TTS), hỗ trợ karaoke highlight câu đọc, RVC voice clone và đa định dạng EPUB, PDF, TXT."
+    />
+    <meta name="twitter:image" content="https://voxread.app/og-preview.png" />
+
+    <!-- Schema.org Structured Data (JSON-LD) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "WebSite",
+          "@id": "https://voxread.app/#website",
+          "url": "https://voxread.app/",
+          "name": "VoxRead",
+          "description": "Modern AI Text-to-Speech Novel & Document Reader",
+          "inLanguage": "vi-VN"
+        },
+        {
+          "@type": "WebApplication",
+          "@id": "https://voxread.app/#app",
+          "name": "VoxRead",
+          "url": "https://voxread.app/",
+          "applicationCategory": "MultimediaApplication",
+          "operatingSystem": "Web, Windows, macOS, Linux",
+          "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD"
+          },
+          "featureList": [
+            "AI Text-to-Speech (Edge-TTS)",
+            "RVC Voice Conversion",
+            "Synchronized Karaoke Sentence Highlighting",
+            "Multi-format Reader (EPUB, PDF, TXT)",
+            "Offline IndexedDB Document Storage",
+            "Gemini AI OCR Screen Reader"
+          ]
+        }
+      ]
+    }
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link

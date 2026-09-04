@@ -775,3 +775,5 @@ export const MascotWidget: React.FC<MascotWidgetProps> = ({
     </div>
   );
 };
+
+export default MascotWidget;
