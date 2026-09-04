@@ -54,7 +54,25 @@ flowchart TD
 
 ## 🚀 Bắt đầu nhanh (Quickstart)
 
-### ⚡ Thiết lập môi trường tự động 1 lệnh (Khuyến nghị)
+### 📦 Cách 1: Cài đặt đơn giản nhất (Dành cho người dùng)
+
+Dành cho người dùng muốn trải nghiệm đọc sách ngay mà **không cần cài đặt Node.js, Python hay Visual C++ Build Tools**:
+
+1. Tải bộ cài đặt Windows (`VoxRead Setup.exe`) từ mục [**Releases**](https://github.com/caoduongle/reader/releases) hoặc tab [**Actions Artifacts**](https://github.com/caoduongle/reader/actions/workflows/build-electron.yml).
+2. Chạy file cài đặt và mở **VoxRead** từ Desktop hoặc Start Menu.
+3. Ứng dụng đã được tích hợp sẵn toàn bộ môi trường suy luận giọng đọc AI (Python runtime, PyTorch CPU, Edge-TTS và RVC), tự động khởi động server nền và sẵn sàng đọc sách ngay lập tức.
+
+> [!NOTE]
+> **Dung lượng bộ cài đặt tương đối nặng (khoảng 500MB – 1.5GB)**:  
+> Bản cài đặt desktop bao gồm trọn gói động cơ mạng nơ-ron học sâu PyTorch và các thư viện xử lý âm thanh offline độc lập, giúp ứng dụng hoạt động 100% không phụ thuộc vào môi trường máy tính người dùng.
+
+---
+
+### 💻 Cách 2: Dành cho nhà phát triển (Build từ mã nguồn)
+
+Dành cho lập trình viên muốn phát triển thêm tính năng hoặc tùy biến mã nguồn:
+
+#### ⚡ Thiết lập môi trường tự động 1 lệnh
 
 Dự án cung cấp sẵn script tự động kiểm tra phiên bản Node.js & Python, cài đặt dependencies JavaScript (`npm install`), và cấu hình môi trường ảo Python virtualenv cho backend:
 
@@ -75,11 +93,9 @@ Dự án cung cấp sẵn script tự động kiểm tra phiên bản Node.js & 
   ./scripts/setup.sh
   ```
 
----
+#### 📖 Khởi động & đóng gói ứng dụng
 
-### 📖 Khởi động ứng dụng
-
-Sau khi chạy script thiết lập xong, bạn có thể khởi động ngay:
+Sau khi chạy script thiết lập xong, bạn có thể chạy:
 
 - **Chạy bản Web** (mở tại `http://localhost:3000`):
   ```bash

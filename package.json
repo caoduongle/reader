@@ -38,6 +38,10 @@
       {
         "from": "python-backend/requirements.txt",
         "to": "python-backend/requirements.txt"
+      },
+      {
+        "from": "python-backend/venv",
+        "to": "python-backend/venv"
       }
     ],
     "win": {

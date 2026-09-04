@@ -26,6 +26,31 @@ jobs:
       - name: Build Web Assets (Vite)
         run: npm run build
 
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Create Python virtual environment
+        run: python -m venv python-backend/venv
+        shell: cmd
+
+      - name: Install fairseq from vendored wheel
+        run: python-backend\venv\Scripts\pip.exe install python-backend\wheels\fairseq-0.12.2-cp310-cp310-win_amd64.whl
+        shell: cmd
+
+      - name: Install backend dependencies
+        run: python-backend\venv\Scripts\pip.exe install -r python-backend\requirements.txt
+        shell: cmd
+
+      - name: Install PyTorch CPU
+        run: python-backend\venv\Scripts\pip.exe install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+        shell: cmd
+
+      - name: Make Python venv relocatable / standalone
+        run: python scripts/bundle-venv.py
+        shell: cmd
+
       - name: Package Desktop Installer (Electron Builder)
         run: npm run electron:build
         env:
