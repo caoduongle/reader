@@ -51,11 +51,11 @@
 
 ### Implementation for User Story 2
 
-- [ ] T006 [P] [US2] Create helper module `lib/ssrfGuard.js` implementing `isPrivateOrReservedIp(ip: string): boolean` (covering IPv4 `0.0.0.0/8`, `10.0.0.0/8`, `100.64.0.0/10`, `127.0.0.0/8`, `169.254.0.0/16`, `172.16.0.0/12`, `192.168.0.0/16`, `>= 224.0.0.0`, IPv6 `::1`, `fc00::/7`, `fe80::/10`, and IPv4-mapped IPv6) and `assertPublicHost(hostname: string): Promise<void>` via `dns.promises.lookup`, with documented commentary on DNS rebinding limitations.
-- [ ] T007 [US2] Integrate `await assertPublicHost(parsedUrl.hostname)` in `server.js` inside `POST /api/fetch-url` prior to `fetch()`, returning HTTP 400 with message `"Không thể truy cập địa chỉ nội bộ hoặc riêng tư từ tính năng này."` when rejected.
-- [ ] T008 [P] [US2] Add unit test cases to `tests/unit/fetchUrl.test.ts` verifying rejection of loopback/private URLs (e.g. `http://127.0.0.1:3001/health`, `http://localhost:8008`) and successful extraction of public URLs.
-- [ ] T009 [US2] Run automated tests via `npm test -- tests/unit/fetchUrl.test.ts` and verify curl request against `http://127.0.0.1:3001/health`.
-- [ ] T010 [US2] Commit Part B independently with git commit message `feat(proxy): block SSRF requests in /api/fetch-url`.
+- [X] T006 [P] [US2] Create helper module `lib/ssrfGuard.js` implementing `isPrivateOrReservedIp(ip: string): boolean` (covering IPv4 `0.0.0.0/8`, `10.0.0.0/8`, `100.64.0.0/10`, `127.0.0.0/8`, `169.254.0.0/16`, `172.16.0.0/12`, `192.168.0.0/16`, `>= 224.0.0.0`, IPv6 `::1`, `fc00::/7`, `fe80::/10`, and IPv4-mapped IPv6) and `assertPublicHost(hostname: string): Promise<void>` via `dns.promises.lookup`, with documented commentary on DNS rebinding limitations.
+- [X] T007 [US2] Integrate `await assertPublicHost(parsedUrl.hostname)` in `server.js` inside `POST /api/fetch-url` prior to `fetch()`, returning HTTP 400 with message `"Không thể truy cập địa chỉ nội bộ hoặc riêng tư từ tính năng này."` when rejected.
+- [X] T008 [P] [US2] Add unit test cases to `tests/unit/fetchUrl.test.ts` verifying rejection of loopback/private URLs (e.g. `http://127.0.0.1:3001/health`, `http://localhost:8008`) and successful extraction of public URLs.
+- [X] T009 [US2] Run automated tests via `npm test -- tests/unit/fetchUrl.test.ts` and verify curl request against `http://127.0.0.1:3001/health`.
+- [X] T010 [US2] Commit Part B independently with git commit message `feat(proxy): block SSRF requests in /api/fetch-url`.
 
 **Checkpoint**: SSRF protection is active and verified with automated tests; Part B is cleanly committed.
 

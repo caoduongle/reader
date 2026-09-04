@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import { GoogleGenAI } from '@google/genai';
 import { Readability } from '@mozilla/readability';
 import { JSDOM } from 'jsdom';
+import { assertPublicHost } from './lib/ssrfGuard.js';
 
 // Load environment variables from .env
 dotenv.config();
@@ -114,6 +115,16 @@ app.post('/api/fetch-url', async (req, res) => {
     return res.status(400).json({
       ok: false,
       error: 'Địa chỉ liên kết (URL) không hợp lệ. Vui lòng nhập URL bắt đầu bằng http:// hoặc https://.',
+    });
+  }
+
+  // Prevent SSRF: block private, intranet, and loopback hosts
+  try {
+    await assertPublicHost(parsedUrl.hostname);
+  } catch {
+    return res.status(400).json({
+      ok: false,
+      error: 'Không thể truy cập địa chỉ nội bộ hoặc riêng tư từ tính năng này.',
     });
   }
 
