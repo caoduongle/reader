@@ -8,6 +8,7 @@ import {
   VolumeX,
   Settings,
   BookOpen,
+  ScanText,
 } from 'lucide-react';
 import { TTSSettings, ThemeMode } from '../types';
 
@@ -29,6 +30,7 @@ interface ControlBarProps {
   onNextChapter: () => void;
   onOpenSettings: () => void;
   onOpenTOC: () => void;
+  onOpenScreenReaderGuide?: () => void;
   onUpdateSettings: (newSettings: Partial<TTSSettings>) => void;
 }
 
@@ -46,6 +48,7 @@ export const ControlBar: React.FC<ControlBarProps> = ({
   onJumpToSentence,
   onOpenSettings,
   onOpenTOC,
+  onOpenScreenReaderGuide,
   onUpdateSettings,
 }) => {
   const [showVolumePopup, setShowVolumePopup] = useState(false);
@@ -266,6 +269,22 @@ export const ControlBar: React.FC<ControlBarProps> = ({
                 </div>
               )}
             </div>
+
+            {/* Screen Reader Guide Button */}
+            {onOpenScreenReaderGuide && (
+              <button
+                id="dock-screen-reader-btn"
+                onClick={onOpenScreenReaderGuide}
+                title="Đọc màn hình (Ctrl+Shift+Space)"
+                className={`p-1.5 rounded-lg transition-colors ${
+                  isDark
+                    ? 'text-slate-400 hover:text-white hover:bg-white/5'
+                    : 'hover:bg-neutral-100 text-neutral-700'
+                }`}
+              >
+                <ScanText className="w-4 h-4" />
+              </button>
+            )}
 
             {/* Chapters / TOC Button */}
             <button

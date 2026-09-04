@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Tray, Menu, dialog, nativeImage } from 'electron';
+import { app, BrowserWindow, Tray, Menu, dialog, nativeImage, clipboard, globalShortcut } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import { spawn, exec, ChildProcess } from 'child_process';
@@ -8,6 +8,7 @@ let tray: Tray | null = null;
 let pythonProcess: ChildProcess | null = null;
 let proxyProcess: ChildProcess | null = null;
 let isQuitting = false;
+let lastCapturedClipboardText = '';
 
 const PORT = 8008;
 const HEALTH_URL = `http://127.0.0.1:${PORT}/health`;
@@ -38,6 +39,9 @@ if (!gotTheLock) {
 
     // 3. Create System Tray
     createSystemTray();
+
+    // 4. Register global shortcut for Screen Reader
+    registerScreenReaderShortcut();
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) {
@@ -327,6 +331,26 @@ function createSystemTray(): void {
         }
       },
     },
+    {
+      label: '🖥️ Đọc màn hình (Ctrl+Shift+Space)',
+      click: () => {
+        if (mainWindow) {
+          mainWindow.show();
+          mainWindow.focus();
+        }
+        dialog.showMessageBox({
+          type: 'info',
+          title: 'Tính năng Đọc màn hình VoxRead',
+          message: 'Hướng dẫn Đọc màn hình từ Clipboard',
+          detail:
+            '1. Bôi đen văn bản ở bất kỳ ứng dụng nào (Word, PDF, trình duyệt, Notepad...)\n' +
+            '2. Nhấn Ctrl+C để sao chép vào bộ nhớ tạm\n' +
+            '3. Bấm tổ hợp phím tắt Ctrl+Shift+Space để VoxRead tự động nạp và đọc văn bản.',
+          buttons: ['Đã hiểu'],
+          defaultId: 0,
+        });
+      },
+    },
     { type: 'separator' },
     {
       label: 'Thoát',
@@ -345,6 +369,43 @@ function createSystemTray(): void {
       mainWindow.focus();
     }
   });
+}
+
+/**
+ * Register global shortcut for Screen Reader (Clipboard tier)
+ */
+function registerScreenReaderShortcut(): void {
+  const shortcutKey = 'CommandOrControl+Shift+Space';
+  const registered = globalShortcut.register(shortcutKey, () => {
+    const rawText = clipboard.readText();
+    const trimmed = rawText.trim();
+    if (!trimmed || trimmed === lastCapturedClipboardText) {
+      return;
+    }
+
+    lastCapturedClipboardText = trimmed;
+
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) {
+        mainWindow.restore();
+      }
+      mainWindow.show();
+      mainWindow.focus();
+      mainWindow.webContents.send('screen-reader:clipboard-captured', trimmed);
+    }
+  });
+
+  if (!registered) {
+    console.warn(`Failed to register global shortcut: ${shortcutKey}`);
+    showPrerequisiteWarning(
+      'Không thể đăng ký phím tắt toàn cục "Ctrl+Shift+Space" (hoặc Cmd+Shift+Space).\n\n' +
+        'Phím tắt này có thể đang bị ứng dụng khác trong hệ thống chiếm giữ. Bạn vẫn có thể sử dụng các phương thức đọc khác của VoxRead bình thường.',
+      'Cảnh báo phím tắt VoxRead',
+      'Xung đột phím tắt toàn cục'
+    );
+  } else {
+    console.log(`Global shortcut registered successfully: ${shortcutKey}`);
+  }
 }
 
 /**
@@ -395,6 +456,10 @@ function killChildProcesses(): void {
 app.on('before-quit', () => {
   isQuitting = true;
   killChildProcesses();
+});
+
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll();
 });
 
 app.on('window-all-closed', () => {

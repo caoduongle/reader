@@ -84,7 +84,7 @@ export interface DocumentItem {
   id: string;
   title: string;
   author?: string;
-  format: 'txt' | 'pdf' | 'epub' | 'pasted' | 'sample' | 'url';
+  format: 'txt' | 'pdf' | 'epub' | 'pasted' | 'sample' | 'url' | 'screen-capture';
   chapters: Chapter[];
   createdAt: number;
   lastRead: {
@@ -153,4 +153,21 @@ export interface FetchUrlErrorResponse {
 }
 
 export type FetchUrlResponse = FetchUrlSuccessResponse | FetchUrlErrorResponse;
+
+export interface ScreenReaderBridge {
+  onClipboardCaptured: (callback: (text: string) => void) => () => void;
+  removeClipboardListener: () => void;
+}
+
+export interface VoxReadDesktopBridge {
+  isDesktop: boolean;
+  platform: string;
+  screenReader?: ScreenReaderBridge;
+}
+
+declare global {
+  interface Window {
+    voxreadDesktop?: VoxReadDesktopBridge;
+  }
+}
 

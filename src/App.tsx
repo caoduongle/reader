@@ -17,6 +17,8 @@ const SettingsModal = React.lazy(() => import('./components/SettingsModal'));
 const ReadingStatsModal = React.lazy(() => import('./components/ReadingStatsModal'));
 import { useReadingStats } from './hooks/useReadingStats';
 import { THEMES } from './utils/themeStyles';
+import { ScanText } from 'lucide-react';
+import { useScreenReaderClipboard } from './hooks/useScreenReaderClipboard';
 import {
   saveReadingPosition,
   getReadingPosition,
@@ -35,6 +37,8 @@ export default function App() {
   const [currentDocument, setCurrentDocument] = useState<DocumentItem>(SAMPLE_DOCUMENTS[0]);
   const [currentChapterIndex, setCurrentChapterIndex] = useState<number>(0);
   const [pendingJumpSentence, setPendingJumpSentence] = useState<number | null>(null);
+  const [pendingAutoPlay, setPendingAutoPlay] = useState<boolean>(false);
+  const [showScreenReaderGuide, setShowScreenReaderGuide] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const showToast = useCallback((msg: string) => {
@@ -175,6 +179,7 @@ export default function App() {
     isPlaying,
     isPaused,
     currentSentenceIndex,
+    play,
     togglePlay,
     stop,
     nextSentence,
@@ -244,14 +249,53 @@ export default function App() {
     }
   };
 
+  // Handle new screen capture from global shortcut clipboard
+  const handleNewScreenCapture = useCallback(
+    (newDoc: DocumentItem) => {
+      stop();
+      setCurrentDocument(newDoc);
+      setCurrentChapterIndex(0);
+      setPendingAutoPlay(true);
+      saveDocument(newDoc).catch(() =>
+        showToast(
+          'Không lưu được tài liệu vào bộ nhớ dài hạn — phiên đọc chỉ tồn tại trong tab hiện tại'
+        )
+      );
+      setActiveDocumentId(newDoc.id);
+      saveReadingPosition({
+        documentId: newDoc.id,
+        chapterIndex: 0,
+        sentenceIndex: 0,
+        progressPercentage: 0,
+        updatedAt: Date.now(),
+      });
+      showToast('Đã nạp văn bản từ màn hình — Bắt đầu đọc...');
+    },
+    [stop, showToast]
+  );
+
+  useScreenReaderClipboard(handleNewScreenCapture);
+
   // Reactive sentence jumping (for cross-chapter search jumps and session restoration)
+  // & Reactive autoplay for screen reader capture
   useEffect(() => {
     if (pendingJumpSentence !== null && currentSentences.length > 0) {
       const target = Math.min(pendingJumpSentence, currentSentences.length - 1);
       jumpToSentence(target, false);
       setPendingJumpSentence(null);
     }
-  }, [currentChapterIndex, currentSentences, pendingJumpSentence, jumpToSentence]);
+    if (pendingAutoPlay && currentSentences.length > 0) {
+      play(0);
+      setPendingAutoPlay(false);
+    }
+  }, [
+    currentChapterIndex,
+    currentSentences,
+    pendingJumpSentence,
+    pendingAutoPlay,
+    jumpToSentence,
+    play,
+  ]);
 
   // Jump from search
   const handleJumpToSearchMatch = (chapterIdx: number, sentenceIdx: number) => {
@@ -471,6 +515,7 @@ export default function App() {
         onNextChapter={handleNextChapter}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenTOC={() => setIsTOCOpen(true)}
+        onOpenScreenReaderGuide={() => setShowScreenReaderGuide(true)}
         onUpdateSettings={updateSettings}
       />
 
@@ -592,6 +637,80 @@ export default function App() {
             onResetStats={resetStats}
           />
         </React.Suspense>
+      )}
+
+      {/* Screen Reader Guide Modal */}
+      {showScreenReaderGuide && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in"
+          onClick={() => setShowScreenReaderGuide(false)}
+        >
+          <div
+            className={`w-full max-w-md p-6 rounded-2xl shadow-2xl border transition-all ${
+              settings.theme === 'dark' ||
+              settings.theme === 'midnight' ||
+              settings.theme === 'forest'
+                ? 'bg-[#16161A] border-white/10 text-slate-200 shadow-black/80'
+                : 'bg-white border-neutral-200 text-neutral-800 shadow-xl'
+            }`}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 rounded-xl bg-amber-500/10 text-amber-500">
+                <ScanText className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold">Đọc màn hình từ Clipboard</h3>
+                <p className="text-xs opacity-70">Phím tắt toàn cục: Ctrl + Shift + Space</p>
+              </div>
+            </div>
+
+            <div className="space-y-3 my-4 text-sm">
+              <div className="flex items-start gap-3 p-3 rounded-xl bg-white/5 border border-white/5">
+                <span className="flex items-center justify-center w-6 h-6 rounded-full bg-amber-500 text-black font-bold text-xs shrink-0">
+                  1
+                </span>
+                <p>
+                  <strong>Bôi đen văn bản</strong> ở bất kỳ ứng dụng nào đang mở (Word, PDF reader,
+                  trình duyệt web, Notepad...).
+                </p>
+              </div>
+
+              <div className="flex items-start gap-3 p-3 rounded-xl bg-white/5 border border-white/5">
+                <span className="flex items-center justify-center w-6 h-6 rounded-full bg-amber-500 text-black font-bold text-xs shrink-0">
+                  2
+                </span>
+                <p>
+                  Nhấn tổ hợp phím{' '}
+                  <kbd className="px-1.5 py-0.5 rounded bg-white/10 font-mono text-xs border border-white/10">
+                    Ctrl + C
+                  </kbd>{' '}
+                  để sao chép vào bộ nhớ tạm.
+                </p>
+              </div>
+
+              <div className="flex items-start gap-3 p-3 rounded-xl bg-white/5 border border-white/5">
+                <span className="flex items-center justify-center w-6 h-6 rounded-full bg-amber-500 text-black font-bold text-xs shrink-0">
+                  3
+                </span>
+                <p>
+                  Bấm{' '}
+                  <kbd className="px-1.5 py-0.5 rounded bg-white/10 font-mono text-xs border border-white/10">
+                    Ctrl + Shift + Space
+                  </kbd>{' '}
+                  (hoặc Cmd+Shift+Space trên Mac). VoxRead sẽ tự động hiện lên và đọc ngay lập tức!
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setShowScreenReaderGuide(false)}
+              className="w-full mt-2 py-2.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-600 active:scale-98 text-black font-medium transition-all cursor-pointer text-center"
+            >
+              Đã hiểu, sẵn sàng đọc
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
