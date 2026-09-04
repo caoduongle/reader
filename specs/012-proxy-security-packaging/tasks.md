@@ -88,10 +88,10 @@
 
 **Purpose**: Execute full verification across all lint, typecheck, and test suites.
 
-- [ ] T017 [P] Run full unit test suite with `npm test` and verify 100% pass across all tests
-- [ ] T018 [P] Run TypeScript type checking with `npx tsc --noEmit` and confirm zero errors
-- [ ] T019 [P] Run ESLint validation with `npx eslint .` and confirm zero lint errors
-- [ ] T020 Validate final quickstart verification checklist in `specs/012-proxy-security-packaging/quickstart.md`
+- [X] T017 [P] Run full unit test suite with `npm test` and verify 100% pass across all tests
+- [X] T018 [P] Run TypeScript type checking with `npx tsc --noEmit` and confirm zero errors
+- [X] T019 [P] Run ESLint validation with `npx eslint .` and confirm zero lint errors
+- [X] T020 Validate final quickstart verification checklist in `specs/012-proxy-security-packaging/quickstart.md`
 
 ---
 
