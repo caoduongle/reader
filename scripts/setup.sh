@@ -119,6 +119,8 @@ else
     success "Virtualenv đã tồn tại sẵn tại ${VENV_DIR}"
 fi
 
+# Lưu ý: Các file wheel binary trong python-backend/wheels/ chỉ dành riêng cho Windows (win_amd64).
+# Trên Linux / macOS, pip cài đặt fairseq trực tiếp từ PyPI bằng compiler có sẵn (build-essential / clang).
 if [ -f "${REQUIREMENTS_FILE}" ]; then
     echo -e "${YELLOW}Đang kiểm tra và cài đặt packages từ requirements.txt...${NC}"
     "${VENV_PYTHON}" -m pip install "pip<24.1" --quiet

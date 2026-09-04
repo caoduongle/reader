@@ -153,6 +153,40 @@ else {
     Write-Success "Virtualenv da ton tai san tai $VenvDir"
 }
 
+# Kiem tra va cai dat fairseq tu wheel vendor san neu co (tranh yeu cau Visual C++ Build Tools)
+$WheelsDir = Join-Path $BackendDir "wheels"
+$pyVerOut = (& $VenvPython -c "import sys; print(sys.version_info[0], sys.version_info[1])").Trim()
+$pyVerParts = $pyVerOut.Split(' ')
+$pyMajor = $pyVerParts[0]
+$pyMinor = $pyVerParts[1]
+$pyTag = "cp$pyMajor$pyMinor"
+$WheelPattern = "fairseq-*$pyTag*win_amd64.whl"
+$MatchingWheels = @()
+
+if (Test-Path $WheelsDir) {
+    $MatchingWheels = @(Get-ChildItem -Path $WheelsDir -Filter $WheelPattern -File -ErrorAction SilentlyContinue)
+}
+
+if ($MatchingWheels.Count -gt 0) {
+    $TargetWheel = $MatchingWheels[0]
+    Write-Host "Tim thay pre-built wheel cho fairseq (Python $pyMajor.$pyMinor $pyTag win_amd64): $($TargetWheel.Name)" -ForegroundColor Cyan
+    Write-Host "Dang cai dat fairseq tu local wheel (khong can Visual C++ Build Tools)..." -ForegroundColor Yellow
+    & $VenvPip install $TargetWheel.FullName
+    if ($LASTEXITCODE -ne 0) {
+        Write-Fail "Cai dat fairseq wheel that bai voi ma loi $LASTEXITCODE."
+    }
+    Write-Success "Cai dat fairseq wheel thanh cong!"
+}
+else {
+    Write-Host ""
+    Write-Host "[CANH BAO] Khong tim thay pre-built wheel fairseq cho Python $pyMajor.$pyMinor ($pyTag) win_amd64 trong $WheelsDir" -ForegroundColor Yellow
+    Write-Host "pip se co gang build fairseq tu source tu PyPI." -ForegroundColor Yellow
+    Write-Host "Luu y: Qua trinh nay yeu cau may tinh phai cai dat Visual C++ Build Tools:" -ForegroundColor Yellow
+    Write-Host "  -> https://visualstudio.microsoft.com/visual-cpp-build-tools/" -ForegroundColor White
+    Write-Host "Hoac xem huong dan build lai wheel tai: python-backend/wheels/README.md" -ForegroundColor White
+    Write-Host ""
+}
+
 if (Test-Path $RequirementsFile) {
     Write-Host "Dang kiem tra va cai dat packages tu requirements.txt..." -ForegroundColor Yellow
     & $VenvPython -m pip install "pip<24.1" --quiet
@@ -161,6 +195,7 @@ if (Test-Path $RequirementsFile) {
         Write-Host ""
         Write-Host "[GOI Y] Neu gap loi build C++ ('Microsoft Visual C++ 14.0 is required' khi build fairseq)," -ForegroundColor Yellow
         Write-Host "ban can cai dat Visual C++ Build Tools tai: https://visualstudio.microsoft.com/visual-cpp-build-tools/" -ForegroundColor Yellow
+        Write-Host "Hoac kiem tra lai file wheel trong python-backend/wheels/" -ForegroundColor Yellow
         Write-Host ""
         Write-Fail "Cai dat python packages that bai voi ma loi $LASTEXITCODE."
     }

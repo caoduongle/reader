@@ -66,6 +66,9 @@ Dự án cung cấp sẵn script tự động kiểm tra phiên bản Node.js & 
 
   _(Hoặc chạy `.\scripts\setup.ps1` nếu bạn đã mở sẵn terminal PowerShell)_.
 
+  > [!NOTE]
+  > **Không cần Visual C++ Build Tools trên Windows**: `fairseq` được đóng gói sẵn dạng wheel trong `python-backend/wheels/` để tránh yêu cầu Visual C++ Build Tools khi cài lại — nếu đổi phiên bản Python, cần build lại wheel theo hướng dẫn trong [`python-backend/wheels/README.md`](python-backend/wheels/README.md).
+
 - **Trên macOS / Linux (Bash)**:
   ```bash
   chmod +x scripts/setup.sh

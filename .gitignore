@@ -39,6 +39,10 @@ venv/
 __pycache__/
 **/__pycache__/
 *.py[cod]
+*.egg-info/
+**/*.egg-info/
+*.dist-info/
+**/*.dist-info/
 
 # Machine learning model weights & checkpoints (never commit heavy binaries to Git)
 *.pth
