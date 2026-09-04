@@ -73,12 +73,12 @@
 
 ### Implementation for User Story 3
 
-- [ ] T011 [P] [US3] Ensure `scripts/bundle-server.mjs` is configured with esbuild plugins to patch `computed-style.js` (inline `default-stylesheet.css`), `css-tree` (neutralize `createRequire(import.meta.url)` in CJS), and `XMLHttpRequest-impl.js` (worker file resolution).
-- [ ] T012 [US3] Update npm script `"build:electron"` in `package.json` to bundle `server.js` using `node scripts/bundle-server.mjs`.
-- [ ] T013 [US3] Implement `startProxyServer()` in `electron/main.ts` resolving `dist-electron/server.cjs` across dev and packaged modes, spawning via `process.execPath` with `ELECTRON_RUN_AS_NODE: '1'`, polling `http://127.0.0.1:3001/health` (60 attempts, 1s interval), and displaying `showPrerequisiteWarning()` if missing or failed.
-- [ ] T014 [US3] Implement unified child process termination in `electron/main.ts` (`killChildProcesses()`) to cleanly terminate both `pythonProcess` and `proxyProcess` using Windows `taskkill /F /T /PID` in `app.on('before-quit')` and Tray "Thoát".
-- [ ] T015 [US3] Build unpacked application with `npm run build && npm run build:electron && npx electron-builder --win --dir`, launch `release/win-unpacked/VoxRead.exe`, verify "Đọc từ liên kết" functions without manual server startup, and verify clean process exit from Tray.
-- [ ] T016 [US3] Commit Part C independently with git commit message `feat(electron): auto-spawn Express proxy in packaged app`.
+- [X] T011 [P] [US3] Ensure `scripts/bundle-server.mjs` is configured with esbuild plugins to patch `computed-style.js` (inline `default-stylesheet.css`), `css-tree` (neutralize `createRequire(import.meta.url)` in CJS), and `XMLHttpRequest-impl.js` (worker file resolution).
+- [X] T012 [US3] Update npm script `"build:electron"` in `package.json` to bundle `server.js` using `node scripts/bundle-server.mjs`.
+- [X] T013 [US3] Implement `startProxyServer()` in `electron/main.ts` resolving `dist-electron/server.cjs` across dev and packaged modes, spawning via `process.execPath` with `ELECTRON_RUN_AS_NODE: '1'`, polling `http://127.0.0.1:3001/health` (60 attempts, 1s interval), and displaying `showPrerequisiteWarning()` if missing or failed.
+- [X] T014 [US3] Implement unified child process termination in `electron/main.ts` (`killChildProcesses()`) to cleanly terminate both `pythonProcess` and `proxyProcess` using Windows `taskkill /F /T /PID` in `app.on('before-quit')` and Tray "Thoát".
+- [X] T015 [US3] Build unpacked application with `npm run build && npm run build:electron && npx electron-builder --win --dir`, launch `release/win-unpacked/VoxRead.exe`, verify "Đọc từ liên kết" functions without manual server startup, and verify clean process exit from Tray.
+- [X] T016 [US3] Commit Part C independently with git commit message `feat(electron): auto-spawn Express proxy in packaged app`.
 
 **Checkpoint**: Packaged application automatically spawns and manages proxy server; Part C is cleanly committed.
 

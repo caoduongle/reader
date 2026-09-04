@@ -6,10 +6,13 @@ import { spawn, exec, ChildProcess } from 'child_process';
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let pythonProcess: ChildProcess | null = null;
+let proxyProcess: ChildProcess | null = null;
 let isQuitting = false;
 
 const PORT = 8008;
 const HEALTH_URL = `http://127.0.0.1:${PORT}/health`;
+const PROXY_PORT = 3001;
+const PROXY_HEALTH_URL = `http://127.0.0.1:${PROXY_PORT}/health`;
 const MAX_HEALTH_CHECKS = 60; // 60 seconds max
 
 // Request single instance lock
@@ -27,8 +30,8 @@ if (!gotTheLock) {
   });
 
   app.whenReady().then(async () => {
-    // 1. Spawn Python backend
-    await startPythonBackend();
+    // 1. Spawn background services (Python backend and Express proxy)
+    await Promise.all([startPythonBackend(), startProxyServer()]);
 
     // 2. Create Window
     createWindow();
@@ -136,15 +139,121 @@ async function startPythonBackend(): Promise<void> {
 /**
  * Display non-blocking information dialog
  */
-function showPrerequisiteWarning(message: string) {
+function showPrerequisiteWarning(
+  message: string,
+  title = 'Thông báo thiết lập VoxRead',
+  heading = 'Lưu ý về dịch vụ nền'
+) {
   dialog.showMessageBox({
     type: 'info',
-    title: 'Thông báo thiết lập VoxRead',
-    message: 'Lưu ý về giọng đọc RVC local',
+    title,
+    message: heading,
     detail: message,
     buttons: ['Đã hiểu, mở VoxRead'],
     defaultId: 0,
   });
+}
+
+/**
+ * Determine proxy script path based on development vs packaged environment
+ */
+function getProxyPaths() {
+  const isPackaged = app.isPackaged;
+  const scriptCandidate = path.join(app.getAppPath(), 'dist-electron', 'server.cjs');
+  const devFallback = path.join(app.getAppPath(), 'server.js');
+
+  let proxyScript = '';
+  if (fs.existsSync(scriptCandidate)) {
+    proxyScript = scriptCandidate;
+  } else if (!isPackaged && fs.existsSync(devFallback)) {
+    proxyScript = devFallback;
+  }
+
+  const baseDir = isPackaged ? process.resourcesPath : app.getAppPath();
+
+  return {
+    proxyScript,
+    baseDir,
+  };
+}
+
+/**
+ * Spawn the Express proxy background server and poll health endpoint
+ */
+async function startProxyServer(): Promise<void> {
+  // 1. Check if server is already running (dev mode terminal or concurrently)
+  try {
+    const checkRes = await fetch(PROXY_HEALTH_URL);
+    if (checkRes.ok) {
+      console.log('Express proxy server is already running on port 3001, skipping spawn.');
+      return;
+    }
+  } catch {
+    // Port 3001 is unoccupied, proceed with spawn
+  }
+
+  const { proxyScript, baseDir } = getProxyPaths();
+
+  if (!proxyScript || !fs.existsSync(proxyScript)) {
+    console.warn('Express proxy script not found at:', proxyScript);
+    showPrerequisiteWarning(
+      'Không tìm thấy file dịch vụ proxy (server.cjs hoặc server.js).\n\n' +
+        'Tính năng "Đọc từ liên kết" và các tiện ích kết nối có thể không hoạt động.',
+      'Thông báo dịch vụ proxy',
+      'Lưu ý về Express Proxy'
+    );
+    return;
+  }
+
+  try {
+    console.log(`Spawning Express proxy: ${process.execPath} ${proxyScript}`);
+    proxyProcess = spawn(process.execPath, [proxyScript], {
+      cwd: baseDir,
+      detached: false,
+      stdio: 'ignore',
+      env: {
+        ...process.env,
+        ELECTRON_RUN_AS_NODE: '1',
+      },
+    });
+
+    proxyProcess.on('error', err => {
+      console.error('Failed to spawn Express proxy process:', err);
+      showPrerequisiteWarning(
+        `Không thể khởi động dịch vụ proxy: ${err.message}\n\n` +
+          'Tính năng "Đọc từ liên kết" có thể không hoạt động.',
+        'Lỗi khởi chạy proxy',
+        'Không thể khởi động dịch vụ nền'
+      );
+    });
+
+    proxyProcess.on('exit', (code, signal) => {
+      console.log(`Express proxy process exited with code ${code}, signal ${signal}`);
+      proxyProcess = null;
+    });
+
+    // Poll health endpoint
+    let isReady = false;
+    for (let attempt = 1; attempt <= MAX_HEALTH_CHECKS; attempt++) {
+      try {
+        const response = await fetch(PROXY_HEALTH_URL);
+        if (response.ok) {
+          console.log(`Express proxy server ready on attempt ${attempt}`);
+          isReady = true;
+          break;
+        }
+      } catch {
+        // Retry
+      }
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+
+    if (!isReady) {
+      console.warn('Express proxy server health poll timed out after 60s');
+    }
+  } catch (err) {
+    console.error('Error starting Express proxy backend:', err);
+  }
 }
 
 /**
@@ -223,7 +332,7 @@ function createSystemTray(): void {
       label: 'Thoát',
       click: () => {
         isQuitting = true;
-        killPythonBackend();
+        killChildProcesses();
         app.quit();
       },
     },
@@ -239,9 +348,10 @@ function createSystemTray(): void {
 }
 
 /**
- * Terminate the Python backend process tree cleanly on Windows
+ * Terminate child process trees (Python backend and Express proxy) cleanly on Windows
  */
-function killPythonBackend(): void {
+function killChildProcesses(): void {
+  // Kill Python process
   if (pythonProcess && pythonProcess.pid) {
     const pid = pythonProcess.pid;
     console.log(`Terminating Python process tree for PID ${pid}...`);
@@ -249,7 +359,7 @@ function killPythonBackend(): void {
       if (process.platform === 'win32') {
         exec(`taskkill /F /T /PID ${pid}`, err => {
           if (err) {
-            console.warn(`taskkill failed for PID ${pid}:`, err.message);
+            console.warn(`taskkill failed for Python PID ${pid}:`, err.message);
           }
         });
       } else {
@@ -260,11 +370,31 @@ function killPythonBackend(): void {
     }
     pythonProcess = null;
   }
+
+  // Kill Express Proxy process
+  if (proxyProcess && proxyProcess.pid) {
+    const pid = proxyProcess.pid;
+    console.log(`Terminating Express proxy process tree for PID ${pid}...`);
+    try {
+      if (process.platform === 'win32') {
+        exec(`taskkill /F /T /PID ${pid}`, err => {
+          if (err) {
+            console.warn(`taskkill failed for Proxy PID ${pid}:`, err.message);
+          }
+        });
+      } else {
+        proxyProcess.kill('SIGTERM');
+      }
+    } catch (err) {
+      console.warn('Error terminating Proxy process:', err);
+    }
+    proxyProcess = null;
+  }
 }
 
 app.on('before-quit', () => {
   isQuitting = true;
-  killPythonBackend();
+  killChildProcesses();
 });
 
 app.on('window-all-closed', () => {

@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
     "build": "vite build",
-    "build:electron": "esbuild electron/main.ts --bundle --platform=node --target=node18 --outfile=dist-electron/main.cjs --external:electron && esbuild electron/preload.ts --bundle --platform=node --target=node18 --outfile=dist-electron/preload.cjs --external:electron",
+    "build:electron": "esbuild electron/main.ts --bundle --platform=node --target=node18 --outfile=dist-electron/main.cjs --external:electron && esbuild electron/preload.ts --bundle --platform=node --target=node18 --outfile=dist-electron/preload.cjs --external:electron && node scripts/bundle-server.mjs",
     "electron:dev": "concurrently -k -s first \"npm run dev\" \"cross-env NODE_ENV=development electron .\"",
     "electron:build": "npm run build && npm run build:electron && electron-builder --win",
     "preview": "vite preview",
