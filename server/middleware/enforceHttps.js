@@ -10,11 +10,12 @@ export function enforceHttps(req, res, next) {
     return next();
   }
 
-  const isHttps = req.secure || req.headers['x-forwarded-proto'] === 'https';
+  const proto = req.headers?.['x-forwarded-proto'] || (typeof req.get === 'function' ? req.get('x-forwarded-proto') : null);
+  const isHttps = req.secure || proto === 'https';
 
   if (!isHttps) {
-    const host = req.headers.host || '127.0.0.1';
-    return res.redirect(301, `https://${host}${req.originalUrl}`);
+    const host = req.headers?.host || (typeof req.get === 'function' ? req.get('host') : null) || '127.0.0.1';
+    return res.redirect(301, `https://${host}${req.originalUrl || req.url || '/'}`);
   }
 
   next();

@@ -13,6 +13,7 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { sanitizeForRender } from '../utils/clientSanitizer';
 
 interface ReaderContentProps {
   currentChapter: Chapter | null;
@@ -164,6 +165,13 @@ export const ReaderContent: React.FC<ReaderContentProps> = ({
 
         {/* Paragraphs and Sentences */}
         <article className="space-y-6 leading-relaxed selection:bg-amber-500/30 selection:text-white">
+          {currentChapter.htmlContent && (
+            <div
+              data-testid="sanitized-html-content"
+              className="prose prose-invert max-w-none mb-6"
+              dangerouslySetInnerHTML={{ __html: sanitizeForRender(currentChapter.htmlContent) }}
+            />
+          )}
           {currentChapter.paragraphs.map(paragraph => (
             <p key={paragraph.id} className="text-justify font-normal">
               {paragraph.sentences.map(sentence => {

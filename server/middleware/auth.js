@@ -128,3 +128,16 @@ export function optionalAuth(req, res, next) {
 
   next();
 }
+
+/**
+ * Middleware: Requires that the authenticated user has the 'admin' role.
+ */
+export function requireAdmin(req, res, next) {
+  if (!req.user || req.user.role !== 'admin') {
+    return res.status(403).json({
+      ok: false,
+      error: 'Truy cập bị từ chối: Yêu cầu quyền quản trị viên (Admin).',
+    });
+  }
+  next();
+}

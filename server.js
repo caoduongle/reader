@@ -27,9 +27,21 @@ import { errorHandler } from './server/middleware/errorHandler.js';
 // Route modules
 import authRouter from './server/routes/auth.js';
 import documentRouter from './server/routes/documents.js';
+import adminRouter from './server/routes/admin.js';
 
 // Load environment variables
 dotenv.config();
+
+// FR-002: Validate required environment variables on startup
+export function validateStartupEnv() {
+  const env = process.env.NODE_ENV || 'development';
+  if (env === 'production') {
+    if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
+      throw new Error('[Security Critical] JWT_SECRET must be at least 32 characters in production.');
+    }
+  }
+}
+validateStartupEnv();
 
 const app = express();
 const PORT = process.env.PROXY_PORT || 3001;
@@ -65,6 +77,12 @@ app.use(
     crossOriginResourcePolicy: { policy: 'cross-origin' },
   })
 );
+
+// Standard browser feature restriction (FR-017)
+app.use((req, res, next) => {
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  next();
+});
 
 // FR-019: Production HTTPS redirection
 app.use(enforceHttps);
@@ -107,6 +125,7 @@ app.use('/api', globalRateLimiter);
 // Mount modular sub-routers
 app.use('/api/auth', authRouter);
 app.use('/api/documents', documentRouter);
+app.use('/api/admin', adminRouter);
 
 // Health check endpoint (Public)
 app.get('/health', (req, res) => {

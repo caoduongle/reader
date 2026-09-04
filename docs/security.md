@@ -60,3 +60,34 @@ flowchart TD
 1. Generate new 32-byte hex key: `node -e "console.log(crypto.randomBytes(32).toString('hex'))"`
 2. Set `DATA_ENCRYPTION_KEY_NEW`.
 3. Run database migration script to re-encrypt stored records using new key before decommissioning old key.
+
+---
+
+## 4. Cloud & AI API Spend Caps and Budget Alerts (FR-012)
+
+To protect the platform against runaway billing and quota exhaustion:
+
+### Google Cloud / Google AI Studio (Gemini API)
+1. **Budget Creation**: Open [Google Cloud Console Billing](https://console.cloud.google.com/billing) -> **Budgets & alerts**.
+2. **Hard Spending Limit**: Create a monthly budget (e.g. `$25.00/month`).
+3. **Threshold Alerts**:
+   - 50% threshold: Notification email sent to platform administrator.
+   - 80% threshold: Warning notification to review usage spikes.
+   - 100% threshold: Trigger Cloud Functions / Webhook to disable external API calls or throttle non-essential traffic.
+4. **Google AI Studio Quota Limits**: Under **API Key settings**, restrict key usage to specific IP addresses and set per-minute request rate caps.
+
+### Supabase Database & Storage Quotas
+1. Access **Project Settings** -> **Usage & Billing**.
+2. Set a **Spend Cap** enabled on the organization to prevent automatic upgrades to paid tiers upon exceeding free/pro quota boundaries.
+
+---
+
+## 5. Production Build & Deployment Hardening (FR-020)
+
+1. **Vite Production Bundler**:
+   - `build.sourcemap: false`: Disallows leaking readable TypeScript sources to the public web.
+   - `esbuild.drop: ['console', 'debugger']`: Automatically strips all debug and console outputs from production bundles.
+2. **Process Privilege Isolation**:
+   - Run Node.js and Python processes as unprivileged non-root users (`uid=1000`) in Docker/systemd environments.
+3. **Reverse Proxy SSL/TLS Termination**:
+   - Nginx/Caddy fronting the application must enforce TLS 1.3 only with strong AEAD cipher suites.

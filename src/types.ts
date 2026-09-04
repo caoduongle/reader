@@ -78,6 +78,7 @@ export interface Chapter {
   paragraphs: ParagraphItem[];
   totalSentences: number;
   wordCount: number;
+  htmlContent?: string;
 }
 
 export interface DocumentItem {

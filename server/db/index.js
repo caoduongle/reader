@@ -32,7 +32,8 @@ export async function query(text, params = []) {
   // Lazy load pg client pool
   if (!poolInstance) {
     try {
-      const { Pool } = await import('pg');
+      const moduleName = 'pg';
+      const { Pool } = await import(/* @vite-ignore */ moduleName);
       poolInstance = new Pool({
         connectionString,
         ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: true } : false,
