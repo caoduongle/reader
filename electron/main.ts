@@ -103,11 +103,15 @@ async function startPythonBackend(): Promise<void> {
 
   try {
     console.log(`Spawning Python server: ${pythonExe} ${serverScript}`);
+    const logPath = path.join(baseDir, 'server.log');
+    const logStream = fs.createWriteStream(logPath, { flags: 'w' });
+
     pythonProcess = spawn(pythonExe, [serverScript], {
       cwd: baseDir,
       detached: false,
-      stdio: 'ignore',
+      stdio: ['ignore', logStream, logStream],
     });
+    console.log(`[VoxRead] Log server Python duoc ghi tai: ${logPath}`);
 
     pythonProcess.on('error', err => {
       console.error('Failed to spawn Python process:', err);
