@@ -1,7 +1,16 @@
-import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import http from 'http';
 
-const mockGenerateContent = vi.fn();
+const { mockGenerateContent, mockLookup } = vi.hoisted(() => {
+  const mockGenerateContent = vi.fn();
+  const mockLookup = vi.fn().mockImplementation(async (hostname: string, options?: { all?: boolean }) => {
+    if (options && options.all) {
+      return [{ address: '93.184.216.34', family: 4 }];
+    }
+    return { address: '93.184.216.34', family: 4 };
+  });
+  return { mockGenerateContent, mockLookup };
+});
 
 vi.mock('@google/genai', () => {
   return {
@@ -11,6 +20,28 @@ vi.mock('@google/genai', () => {
       };
     },
   };
+});
+
+vi.mock('dns/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('dns/promises')>();
+  return {
+    ...actual,
+    lookup: mockLookup,
+    default: {
+      ...(actual as object),
+      lookup: mockLookup,
+    },
+  };
+});
+
+beforeEach(() => {
+  mockLookup.mockImplementation(async (hostname: string, options?: { all?: boolean }) => {
+    if (options && options.all) {
+      return [{ address: '93.184.216.34', family: 4 }];
+    }
+    return { address: '93.184.216.34', family: 4 };
+  });
+  mockLookup.mockClear();
 });
 
 import app from '../../server';
@@ -263,6 +294,7 @@ describe('POST /api/fetch-url (Express server endpoint)', () => {
       expect(body.ok).toBe(true);
       expect(body.title).toContain('Public Domain Article');
       expect(body.content).toContain('This is a verified public article body');
+      expect(mockLookup).toHaveBeenCalledWith('example.com', { all: true });
     } finally {
       vi.stubGlobal('fetch', originalFetch);
     }
@@ -462,6 +494,22 @@ describe('User Story 1: Multi-Hop SSRF Defense Across HTTP Redirects', () => {
     } finally {
       vi.stubGlobal('fetch', originalFetch);
     }
+  });
+
+  it('blocks domain when DNS resolution returns a private IP (DNS rebinding / malicious DNS simulation)', async () => {
+    mockLookup.mockResolvedValueOnce([{ address: '127.0.0.1', family: 4 }]);
+
+    const res = await fetch(`${baseUrl}/api/fetch-url`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: 'https://malicious-dns.test/article' }),
+    });
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(body.error).toBe('Không thể truy cập địa chỉ nội bộ hoặc riêng tư từ tính năng này.');
+    expect(mockLookup).toHaveBeenCalledWith('malicious-dns.test', { all: true });
   });
 });
 
