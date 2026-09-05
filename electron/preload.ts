@@ -16,4 +16,9 @@ contextBridge.exposeInMainWorld('voxreadDesktop', {
       ipcRenderer.removeAllListeners('screen-reader:clipboard-captured');
     },
   },
+  models: {
+    getDir: () => ipcRenderer.invoke('models:get-dir'),
+    openFolder: () => ipcRenderer.invoke('models:open-folder'),
+    importModel: () => ipcRenderer.invoke('models:import'),
+  },
 });

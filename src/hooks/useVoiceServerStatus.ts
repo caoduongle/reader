@@ -1,6 +1,19 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 
-export type VoiceServerConnectionStatus = 'checking' | 'connected' | 'unreachable';
+export type VoiceServerConnectionStatus =
+  | 'checking'
+  | 'connected'
+  | 'model_missing'
+  | 'unreachable';
+
+export interface HealthResponse {
+  ok: boolean;
+  model_loaded: boolean;
+  reason?: string;
+  model_dir?: string;
+  model_name?: string;
+  index_name?: string;
+}
 
 export interface UseVoiceServerStatusOptions {
   serverUrl: string;
@@ -12,7 +25,10 @@ export interface UseVoiceServerStatusReturn {
   status: VoiceServerConnectionStatus;
   isChecking: boolean;
   errorMessage: string | null;
+  modelDir: string | null;
+  modelName: string | null;
   checkHealth: () => Promise<boolean>;
+  reloadModel: () => Promise<boolean>;
 }
 
 export function useVoiceServerStatus({
@@ -23,6 +39,8 @@ export function useVoiceServerStatus({
   const [status, setStatus] = useState<VoiceServerConnectionStatus>('checking');
   const [isChecking, setIsChecking] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [modelDir, setModelDir] = useState<string | null>(null);
+  const [modelName, setModelName] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const checkHealth = useCallback(async (): Promise<boolean> => {
@@ -43,15 +61,28 @@ export function useVoiceServerStatus({
       });
 
       if (res.ok) {
-        const data = await res.json();
-        if (data && data.ok) {
-          setStatus('connected');
-          setErrorMessage(null);
-          setIsChecking(false);
-          return true;
+        const data = (await res.json()) as HealthResponse;
+        if (data) {
+          if (data.ok && data.model_loaded) {
+            setStatus('connected');
+            setModelDir(data.model_dir || null);
+            setModelName(data.model_name || null);
+            setErrorMessage(null);
+            setIsChecking(false);
+            return true;
+          } else if (data.reason === 'model_missing' || !data.model_loaded) {
+            setStatus('model_missing');
+            setModelDir(data.model_dir || null);
+            setModelName(null);
+            setErrorMessage('Chưa có file model (.pth) trong thư mục');
+            setIsChecking(false);
+            return false;
+          }
         }
       }
       setStatus('unreachable');
+      setModelDir(null);
+      setModelName(null);
       setErrorMessage('Server phản hồi nhưng trạng thái không sẵn sàng');
       setIsChecking(false);
       return false;
@@ -60,6 +91,8 @@ export function useVoiceServerStatus({
         return false;
       }
       setStatus('unreachable');
+      setModelDir(null);
+      setModelName(null);
       setErrorMessage(
         err instanceof Error ? err.message : 'Không thể kết nối đến server'
       );
@@ -67,6 +100,23 @@ export function useVoiceServerStatus({
       return false;
     }
   }, [enabled, serverUrl]);
+
+  const reloadModel = useCallback(async (): Promise<boolean> => {
+    try {
+      const cleanUrl = serverUrl.replace(/\/+$/, '');
+      const res = await fetch(`${cleanUrl}/model/reload`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (res.ok) {
+        await checkHealth();
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  }, [serverUrl, checkHealth]);
 
   useEffect(() => {
     if (!enabled) {
@@ -96,6 +146,10 @@ export function useVoiceServerStatus({
     status,
     isChecking,
     errorMessage,
+    modelDir,
+    modelName,
     checkHealth,
+    reloadModel,
   };
 }
+

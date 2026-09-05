@@ -39,23 +39,28 @@ def ensure_mock_rvc_when_empty():
 
 
 def test_health_endpoint_returns_ok(client):
-    """Verify GET /health returns HTTP 200 with status and model loading flag."""
+    """Verify GET /health returns HTTP 200 with status, model_loaded=True, and model_dir."""
     response = client.get("/health")
     assert response.status_code == 200
 
     data = response.get_json()
     assert data is not None
     assert data.get("ok") is True
-    assert "model_loaded" in data
+    assert data.get("model_loaded") is True
+    assert "model_dir" in data
 
 
 def test_health_endpoint_when_no_model(client):
-    """Verify GET /health reports model_loaded=False when rvc is None."""
+    """Verify GET /health reports ok=False, reason=model_missing, model_loaded=False when rvc is None."""
     with patch.object(server, "rvc", None):
         response = client.get("/health")
         assert response.status_code == 200
         data = response.get_json()
+        assert data["ok"] is False
+        assert data["reason"] == "model_missing"
         assert data["model_loaded"] is False
+        assert "model_dir" in data
+
 
 
 def test_speak_endpoint_rejects_missing_text(client):
@@ -170,7 +175,44 @@ def test_discover_model_paths_no_model(tmp_path):
 
 
 def test_discover_model_paths_missing_dir(tmp_path):
-    """Verify discover_model_paths returns (None, '') when model/ directory does not exist."""
-    model_path, index_path = server.discover_model_paths(str(tmp_path / "nonexistent"))
+    """Verify discover_model_paths auto-creates model/ directory if it does not exist."""
+    nonexistent = tmp_path / "nonexistent"
+    model_path, index_path = server.discover_model_paths(str(nonexistent))
     assert model_path is None
     assert index_path == ""
+    assert (nonexistent / "model").is_dir()
+
+
+def test_model_list_endpoint(client):
+    """Verify GET /model/list returns status 200 with model directory and file lists."""
+    response = client.get("/model/list")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data is not None
+    assert data.get("ok") is True
+    assert "model_dir" in data
+    assert "pth_files" in data
+    assert "index_files" in data
+
+
+def test_model_create_folder_endpoint(client):
+    """Verify POST /model/create-folder idempotently creates model folder and returns path."""
+    response = client.post("/model/create-folder")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data is not None
+    assert data.get("ok") is True
+    assert "model_dir" in data
+    assert os.path.isdir(data["model_dir"])
+
+
+def test_model_reload_endpoint(client):
+    """Verify POST /model/reload triggers model reloading and returns health status."""
+    response = client.post("/model/reload")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data is not None
+    assert "ok" in data
+    assert "model_loaded" in data
+    assert "model_dir" in data
+

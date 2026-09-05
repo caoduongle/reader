@@ -22,6 +22,8 @@ from rvc_python.infer import RVCInference
 # Thu muc chua chinh file server.py nay - dung lam goc cho moi duong dan ben duoi,
 # de du chay tu dau (terminal o thu muc khac, Task Scheduler, Startup...) van dung.
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MODEL_DIR = os.path.join(BASE_DIR, "model")
+os.makedirs(MODEL_DIR, exist_ok=True)
 
 
 def discover_model_paths(base_dir: str):
@@ -29,10 +31,10 @@ def discover_model_paths(base_dir: str):
     Quet thu muc model/ ben trong base_dir:
     - MODEL_PATH: file .pth dau tien theo thu tu abc (hoac None neu khong co)
     - INDEX_PATH: file .index dau tien theo thu tu abc (hoac "" neu khong co)
+    Tu dong tao thu muc model/ neu chua ton tai.
     """
     model_dir = os.path.join(base_dir, "model")
-    if not os.path.isdir(model_dir):
-        return None, ""
+    os.makedirs(model_dir, exist_ok=True)
 
     pth_files = sorted([f for f in os.listdir(model_dir) if f.endswith(".pth") and not f.startswith(".")])
     index_files = sorted([f for f in os.listdir(model_dir) if f.endswith(".index") and not f.startswith(".")])
@@ -81,22 +83,41 @@ app = Flask(__name__)
 rvc_lock = threading.Lock()  # tranh 2 request goi RVC cung luc (nhat la khi dung GPU)
 
 rvc = None
-if MODEL_PATH and os.path.isfile(MODEL_PATH):
-    try:
-        print(f"Dang tai model RVC tu: {MODEL_PATH} ... (lan dau se tu tai them hubert_base.pt + rmvpe.pt, ~200-300MB)")
-        rvc = RVCInference(
-            device=DEVICE,
-            model_path=MODEL_PATH,
-            index_path=INDEX_PATH,
-            version="v2",
-        )
-        rvc.set_params(**RVC_PARAMS)
-        print(f"Model san sang ({os.path.basename(MODEL_PATH)}). Server dang chay tai http://localhost:{PORT}  (giu cua so nay mo)")
-    except Exception as e:
+
+
+def reload_model():
+    """
+    Quet lai thu muc model/ va khoi tao lai RVCInference.
+    Tra ve True neu load duoc model, False neu khong co model hoac gap loi.
+    """
+    global MODEL_PATH, INDEX_PATH, rvc
+    MODEL_PATH, INDEX_PATH = discover_model_paths(BASE_DIR)
+    if MODEL_PATH and os.path.isfile(MODEL_PATH):
+        try:
+            print(f"Dang tai model RVC tu: {MODEL_PATH} ... (lan dau se tu tai them hubert_base.pt + rmvpe.pt, ~200-300MB)")
+            new_rvc = RVCInference(
+                device=DEVICE,
+                model_path=MODEL_PATH,
+                index_path=INDEX_PATH,
+                version="v2",
+            )
+            new_rvc.set_params(**RVC_PARAMS)
+            rvc = new_rvc
+            print(f"Model san sang ({os.path.basename(MODEL_PATH)}). Server dang chay tai http://localhost:{PORT}  (giu cua so nay mo)")
+            return True
+        except Exception as e:
+            rvc = None
+            print(f"[VoxRead] Loi khi khoi tao model RVC ({MODEL_PATH}): {e}")
+            return False
+    else:
         rvc = None
-        print(f"[VoxRead] Loi khi khoi tao model RVC ({MODEL_PATH}): {e}")
-else:
-    print("[VoxRead] Canh bao: Chua co model giong RVC (.pth) trong thu muc python-backend/model/, tinh nang RVC se khong kha dung cho toi khi ban them model.")
+        print("[VoxRead] Canh bao: Chua co model giong RVC (.pth) trong thu muc python-backend/model/, tinh nang RVC se khong kha dung cho toi khi ban them model.")
+        return False
+
+
+# Khoi tao model luc bat dau
+reload_model()
+
 
 
 async def _synthesize_base(text: str, out_path: str):
@@ -159,7 +180,7 @@ def _add_cors_headers(resp):
     allowed_origins = {"http://localhost:3000", "http://127.0.0.1:3000", "null"}
     if origin and origin in allowed_origins:
         resp.headers["Access-Control-Allow-Origin"] = origin
-        resp.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
+        resp.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
         resp.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     resp.headers["X-Content-Type-Options"] = "nosniff"
     resp.headers["X-Frame-Options"] = "DENY"
@@ -168,9 +189,71 @@ def _add_cors_headers(resp):
 
 @app.route("/health", methods=["GET"])
 def health():
+    model_dir = os.path.join(BASE_DIR, "model")
     model_loaded = rvc is not None and getattr(rvc, "current_model", None) is not None
-    return jsonify({"ok": True, "model_loaded": bool(model_loaded)})
+    if model_loaded:
+        return jsonify({
+            "ok": True,
+            "model_loaded": True,
+            "model_name": os.path.basename(MODEL_PATH) if MODEL_PATH else None,
+            "index_name": os.path.basename(INDEX_PATH) if INDEX_PATH else None,
+            "model_dir": model_dir,
+        })
+    return jsonify({
+        "ok": False,
+        "reason": "model_missing",
+        "model_loaded": False,
+        "model_dir": model_dir,
+    })
+
+
+@app.route("/model/list", methods=["GET"])
+def model_list():
+    model_dir = os.path.join(BASE_DIR, "model")
+    os.makedirs(model_dir, exist_ok=True)
+    pth_files = sorted([f for f in os.listdir(model_dir) if f.endswith(".pth") and not f.startswith(".")])
+    index_files = sorted([f for f in os.listdir(model_dir) if f.endswith(".index") and not f.startswith(".")])
+    return jsonify({
+        "ok": True,
+        "model_dir": model_dir,
+        "active_model": os.path.basename(MODEL_PATH) if MODEL_PATH else None,
+        "active_index": os.path.basename(INDEX_PATH) if INDEX_PATH else None,
+        "pth_files": pth_files,
+        "index_files": index_files,
+    })
+
+
+@app.route("/model/reload", methods=["POST"])
+def model_reload():
+    with rvc_lock:
+        success = reload_model()
+    model_dir = os.path.join(BASE_DIR, "model")
+    if success and rvc is not None:
+        return jsonify({
+            "ok": True,
+            "model_loaded": True,
+            "model_name": os.path.basename(MODEL_PATH) if MODEL_PATH else None,
+            "index_name": os.path.basename(INDEX_PATH) if INDEX_PATH else None,
+            "model_dir": model_dir,
+        })
+    return jsonify({
+        "ok": False,
+        "reason": "model_missing",
+        "model_loaded": False,
+        "model_dir": model_dir,
+    })
+
+
+@app.route("/model/create-folder", methods=["POST"])
+def model_create_folder():
+    model_dir = os.path.join(BASE_DIR, "model")
+    os.makedirs(model_dir, exist_ok=True)
+    return jsonify({
+        "ok": True,
+        "model_dir": model_dir,
+    })
 
 
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=PORT, threaded=True)
+

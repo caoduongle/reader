@@ -66,7 +66,85 @@ describe('useVoiceServerStatus hook', () => {
     expect(result.current.errorMessage).toBe('Failed to fetch: Connection refused');
   });
 
-  it('transitions to unreachable when server returns 500 or ok: false', async () => {
+  it('transitions to model_missing when /health returns reason: model_missing or model_loaded: false', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ok: false,
+        reason: 'model_missing',
+        model_loaded: false,
+        model_dir: 'E:\\reader\\python-backend\\model',
+      }),
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    const { result } = renderHook(() =>
+      useVoiceServerStatus({
+        serverUrl: 'http://localhost:8008',
+        enabled: true,
+        intervalMs: 5000,
+      })
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(result.current.status).toBe('model_missing');
+    expect(result.current.modelDir).toBe('E:\\reader\\python-backend\\model');
+    expect(result.current.modelName).toBeNull();
+    expect(result.current.errorMessage).toContain('Chưa có file model');
+  });
+
+  it('triggers reloadModel via POST /model/reload and calls checkHealth', async () => {
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          ok: false,
+          reason: 'model_missing',
+          model_loaded: false,
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ ok: true, model_loaded: true, model_name: 'test.pth' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ ok: true, model_loaded: true, model_name: 'test.pth' }),
+      });
+    vi.stubGlobal('fetch', mockFetch);
+
+    const { result } = renderHook(() =>
+      useVoiceServerStatus({
+        serverUrl: 'http://localhost:8008',
+        enabled: true,
+        intervalMs: 5000,
+      })
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(result.current.status).toBe('model_missing');
+
+    let reloadSuccess = false;
+    await act(async () => {
+      reloadSuccess = await result.current.reloadModel();
+    });
+
+    expect(reloadSuccess).toBe(true);
+    expect(mockFetch).toHaveBeenCalledWith(
+      'http://localhost:8008/model/reload',
+      expect.objectContaining({ method: 'POST' })
+    );
+    expect(result.current.status).toBe('connected');
+    expect(result.current.modelName).toBe('test.pth');
+  });
+
+  it('transitions to unreachable when server returns 500 or network failure', async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: false,
       json: async () => ({ ok: false }),

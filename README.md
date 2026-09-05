@@ -154,14 +154,19 @@ Dự án thiết lập 3 workflow trong `.github/workflows/`:
 
 Dành cho người muốn đọc sách bằng chính giọng AI của bản thân:
 
-1. **Đặt file model vào thư mục model/**:
-   - Chỉ cần copy file `.pth` và `.index` bất kỳ (lấy từ Colab, xem hướng dẫn chi tiết bên dưới) vào thư mục `python-backend/model/`. Hệ thống sẽ **tự động nhận diện** model mà không cần sửa bất kỳ dòng code nào.
+1. **Thêm model trực tiếp từ giao diện (Khuyên dùng)**:
+   - Trong VoxRead Desktop, mở **Cài đặt** (`Alt+,`) → chọn tab **"Giọng đọc & Tốc độ"** → chọn nguồn giọng **"Giọng của tôi (RVC local)"**.
+   - Bấm nút **"+ Thêm model"** (có sẵn ngay trong banner cảnh báo hoặc mục *Quản lý model giọng đọc*) và chọn file `.pth` (kèm `.index` nếu có). Hệ thống sẽ tự động copy vào `python-backend/model/` và hot-reload nạp model ngay lập tức mà không cần khởi động lại ứng dụng.
+   - Bạn cũng có thể bấm **"Mở thư mục"** để mở nhanh File Explorer đến thư mục `python-backend/model/`.
+
+2. **Hoặc copy thủ công vào thư mục model/**:
+   - Copy file `.pth` và `.index` bất kỳ vào thư mục `python-backend/model/`. Hệ thống sẽ **tự động nhận diện** model đầu tiên theo thứ tự abc.
    - Nếu máy **không có GPU NVIDIA**, bạn có thể đổi dòng `DEVICE = "cuda:0"` thành `DEVICE = "cpu:0"` trong `python-backend/server.py` nếu muốn ép chạy CPU (hoặc thư viện sẽ tự động fallback sang CPU).
 
-2. **Khởi chạy server RVC** (nếu chạy độc lập ngoài Electron để test):
+3. **Khởi chạy server RVC** (nếu chạy độc lập ngoài Electron để test):
    - **Windows**: `python-backend\venv\Scripts\activate` rồi `python python-backend\server.py`
    - **macOS/Linux**: `source python-backend/venv/bin/activate` rồi `python python-backend/server.py`
-   - Server lắng nghe tại `http://localhost:8008`. Mở VoxRead → **Cài đặt** → chọn nguồn giọng **"Giọng của tôi (RVC local)"**.
+   - Server lắng nghe tại `http://localhost:8008`.
    - Khi chạy qua `npm run electron:dev` hoặc bản desktop đã cài đặt, bước này **được tự động hóa** — không cần tự gõ lệnh.
 
 > 📖 **Hướng dẫn chi tiết toàn tập về RVC**:

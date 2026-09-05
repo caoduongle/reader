@@ -160,10 +160,14 @@ export function useTTS(
       clearTimeout(timeoutId);
       if (res.ok) {
         const data = await res.json();
-        if (data.ok) {
+        if (data.ok && data.model_loaded) {
           setRvcServerStatus('connected');
           setServerErrorMessage(null);
           return true;
+        } else if (data.reason === 'model_missing' || !data.model_loaded) {
+          setRvcServerStatus('model_missing');
+          setServerErrorMessage('Chưa có file model (.pth) trong thư mục python-backend/model');
+          return false;
         }
       }
       setRvcServerStatus('unreachable');

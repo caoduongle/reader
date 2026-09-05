@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Tray, Menu, dialog, nativeImage, clipboard, globalShortcut } from 'electron';
+import { app, BrowserWindow, Tray, Menu, dialog, nativeImage, clipboard, globalShortcut, ipcMain, shell } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import { spawn, exec, ChildProcess } from 'child_process';
@@ -44,6 +44,9 @@ if (!gotTheLock) {
 
     // 4. Register global shortcut for Screen Reader
     registerScreenReaderShortcut();
+
+    // 5. Register RVC Model management IPC handlers
+    registerModelIpcHandlers();
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) {
@@ -539,6 +542,107 @@ function registerScreenReaderShortcut(): void {
   } else {
     console.log(`Global shortcut registered successfully: ${shortcutKey}`);
   }
+}
+
+/**
+ * Register IPC handlers for RVC Voice Model management:
+ * - models:get-dir: returns absolute path to python-backend/model
+ * - models:open-folder: opens model directory in OS file explorer
+ * - models:import: shows native file dialog (.pth, .index) and copies to model directory
+ */
+function registerModelIpcHandlers(): void {
+  ipcMain.handle('models:get-dir', async () => {
+    const { baseDir } = getBackendPaths();
+    const modelDir = path.join(baseDir, 'model');
+    if (!fs.existsSync(modelDir)) {
+      fs.mkdirSync(modelDir, { recursive: true });
+    }
+    return modelDir;
+  });
+
+  ipcMain.handle('models:open-folder', async () => {
+    try {
+      const { baseDir } = getBackendPaths();
+      const modelDir = path.join(baseDir, 'model');
+      if (!fs.existsSync(modelDir)) {
+        fs.mkdirSync(modelDir, { recursive: true });
+      }
+      const openErr = await shell.openPath(modelDir);
+      if (openErr) {
+        console.warn('Failed to open model directory:', openErr);
+        return { success: false, error: openErr };
+      }
+      return { success: true };
+    } catch (err) {
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+  });
+
+  ipcMain.handle('models:import', async () => {
+    try {
+      const { baseDir } = getBackendPaths();
+      const modelDir = path.join(baseDir, 'model');
+      if (!fs.existsSync(modelDir)) {
+        fs.mkdirSync(modelDir, { recursive: true });
+      }
+
+      const dialogOptions = {
+        title: 'Chọn file model giọng RVC (.pth, .index)',
+        properties: ['openFile', 'multiSelections'] as ('openFile' | 'multiSelections')[],
+        filters: [
+          {
+            name: 'RVC Voice Models (*.pth, *.index)',
+            extensions: ['pth', 'index'],
+          },
+          {
+            name: 'Tất cả các file (*.*)',
+            extensions: ['*'],
+          },
+        ],
+      };
+
+      const result = mainWindow
+        ? await dialog.showOpenDialog(mainWindow, dialogOptions)
+        : await dialog.showOpenDialog(dialogOptions);
+
+      if (result.canceled || !result.filePaths || result.filePaths.length === 0) {
+        return { success: false, canceled: true };
+      }
+
+      const importedFiles: string[] = [];
+      for (const filePath of result.filePaths) {
+        const ext = path.extname(filePath).toLowerCase();
+        if (ext !== '.pth' && ext !== '.index') {
+          continue;
+        }
+        const fileName = path.basename(filePath);
+        const destPath = path.join(modelDir, fileName);
+        fs.copyFileSync(filePath, destPath);
+        importedFiles.push(fileName);
+      }
+
+      if (importedFiles.length === 0) {
+        return {
+          success: false,
+          error: 'Chưa có file .pth hoặc .index hợp lệ nào được chọn.',
+        };
+      }
+
+      return {
+        success: true,
+        importedFiles,
+        targetDir: modelDir,
+      };
+    } catch (err) {
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+  });
 }
 
 /**

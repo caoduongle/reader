@@ -21,7 +21,7 @@ export interface TTSVoiceOption {
 
 export type TTSProvider = 'browser' | 'rvc-local';
 
-export type RVCServerStatus = 'unknown' | 'checking' | 'connected' | 'unreachable';
+export type RVCServerStatus = 'unknown' | 'checking' | 'connected' | 'model_missing' | 'unreachable';
 
 export interface TTSSettings {
   ttsProvider: TTSProvider;
@@ -160,10 +160,25 @@ export interface ScreenReaderBridge {
   removeClipboardListener: () => void;
 }
 
+export interface ModelImportResult {
+  success: boolean;
+  canceled?: boolean;
+  importedFiles?: string[];
+  targetDir?: string;
+  error?: string;
+}
+
+export interface DesktopModelsBridge {
+  getDir: () => Promise<string>;
+  openFolder: () => Promise<{ success: boolean; error?: string }>;
+  importModel: () => Promise<ModelImportResult>;
+}
+
 export interface VoxReadDesktopBridge {
   isDesktop: boolean;
   platform: string;
   screenReader?: ScreenReaderBridge;
+  models?: DesktopModelsBridge;
 }
 
 declare global {
@@ -171,4 +186,5 @@ declare global {
     voxreadDesktop?: VoxReadDesktopBridge;
   }
 }
+
 

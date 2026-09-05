@@ -244,6 +244,7 @@ là xong — **giữ cửa sổ terminal này mở** trong lúc sử dụng. Ki�
 | Giọng lệch tông (quá cao/thấp so với bạn)    | `BASE_VOICE` khác giới tính với giọng đã train | Đổi `BASE_VOICE` cho cùng giới tính, hoặc chỉnh `PITCH_SHIFT` thành `12` / `-12`                                                                                                                       |
 | Đọc chậm, hay khựng giữa các câu             | Đang chạy bằng CPU                             | Bình thường nếu không có GPU — app/extension đã tự tải trước 1–2 câu kế tiếp để đỡ giật, nhưng CPU vẫn chậm hơn GPU rõ rệt                                                                             |
 | Lỗi tải/giải mã audio ngay câu đầu           | Thiếu ffmpeg trên máy (hiếm gặp)               | Cài ffmpeg hệ thống (`winget install ffmpeg` trên Windows, `brew install ffmpeg` trên macOS, `apt install ffmpeg` trên Linux)                                                                          |
+| Báo "Chưa có model" hoặc thiếu file `.pth` | Chưa copy model vào `python-backend/model/`    | Trong Cài đặt VoxRead, bấm nút **"+ Thêm model"** rồi chọn file `.pth`/`.index`, hoặc bấm **"Mở thư mục"** để copy thủ công. Server sẽ tự động reload ngay sau khi copy. |
 | Không tải được `hubert_base.pt` / `rmvpe.pt` | Mất mạng giữa chừng lúc tự tải                 | Xoá thư mục `base_model` bên trong package `rvc_python` (trong `venv/Lib/site-packages/rvc_python/` hoặc tương đương) để nó tải lại, hoặc tải thủ công từ `huggingface.co/lj1995/VoiceConversionWebUI` |
 
 ---
