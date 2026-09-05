@@ -192,6 +192,9 @@ def _run_rvc_inference(base_path: str, out_path: str):
         error_detail = result[0] if len(result) > 0 and result[0] else "Lỗi không xác định từ pipeline RVC"
         raise RuntimeError(f"Lỗi pipeline RVC: {error_detail}")
 
+    print(f"[VoxRead][Debug] WAV output: shape={result.shape}, dtype={result.dtype}, "
+          f"sample_rate={rvc.vc.tgt_sr}, duration={len(result)/rvc.vc.tgt_sr:.2f}s")
+
     wavfile.write(out_path, rvc.vc.tgt_sr, result)
     return out_path
 

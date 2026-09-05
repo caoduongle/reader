@@ -384,4 +384,32 @@ def test_speak_timing_log_emitted(client, capsys):
         assert f"Text length: {len(sample_text)} ky tu" in captured.out
 
 
+def test_speak_wav_debug_log_emitted(client, capsys):
+    """Verify POST /speak prints WAV output debug telemetry with shape, dtype, sample_rate, and duration."""
+    dummy_audio_array = np.zeros(16000, dtype=np.int16)
+
+    async def mock_synth(text, out_path):
+        with open(out_path, "wb") as f:
+            f.write(b"dummy_base_audio")
+
+    if not hasattr(server.rvc, "models") or not isinstance(server.rvc.models, dict):
+        server.rvc.models = {server.rvc.current_model: {"index": ""}}
+    if not hasattr(server.rvc.vc, "tgt_sr") or not isinstance(server.rvc.vc.tgt_sr, int):
+        server.rvc.vc.tgt_sr = 40000
+
+    sample_text = "Hôm nay trời rất đẹp."
+    with patch.object(server, "_synthesize_base", side_effect=mock_synth), \
+         patch.object(server.rvc.vc, "vc_single", return_value=dummy_audio_array):
+        response = client.post("/speak", json={"text": sample_text})
+        assert response.status_code == 200
+
+        captured = capsys.readouterr()
+        assert "[VoxRead][Debug] WAV output:" in captured.out
+        assert "shape=" in captured.out
+        assert "dtype=" in captured.out
+        assert "sample_rate=" in captured.out
+        assert "duration=" in captured.out
+
+
+
 

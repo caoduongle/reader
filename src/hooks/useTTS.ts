@@ -557,11 +557,21 @@ export function useTTS(
         }
       };
 
-      audio.onerror = e => {
-        console.warn('Audio element error:', e);
+      audio.onerror = () => {
+        const mediaError = audio.error;
+        const codeMap: Record<number, string> = {
+          1: 'MEDIA_ERR_ABORTED',
+          2: 'MEDIA_ERR_NETWORK',
+          3: 'MEDIA_ERR_DECODE',
+          4: 'MEDIA_ERR_SRC_NOT_SUPPORTED',
+        };
+        const reason = mediaError
+          ? `${codeMap[mediaError.code] || mediaError.code}${mediaError.message ? ': ' + mediaError.message : ''}`
+          : 'unknown';
+        console.error('[VoxRead] Audio playback error:', reason, 'blob size check pending');
         setIsPlaying(false);
         setIsPaused(false);
-        setServerErrorMessage('Lỗi phát âm thanh WAV.');
+        setServerErrorMessage(`Lỗi phát âm thanh WAV (${reason}).`);
       };
 
       try {
