@@ -794,7 +794,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                               <span className="truncate">{file}</span>
                               {activeModelName === file && (
                                 <span className="text-[9px] px-1.5 py-0.5 bg-amber-500/30 text-amber-200 rounded font-sans shrink-0 ml-2">
-                                  Đang nạp
+                                  Đang dùng
                                 </span>
                               )}
                             </div>

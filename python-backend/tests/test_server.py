@@ -1,6 +1,7 @@
 import os
 import sys
 from unittest.mock import MagicMock, patch
+import numpy as np
 import pytest
 
 # Ensure rvc_python is mocked if compiled C++ binaries are not present
@@ -33,6 +34,15 @@ def ensure_mock_rvc_when_empty():
     if server.rvc is None:
         mock_rvc = MagicMock()
         mock_rvc.current_model = "mock_model"
+        mock_rvc.models = {"mock_model": {"index": ""}}
+        mock_rvc.vc.tgt_sr = 40000
+        mock_rvc.f0up_key = 0
+        mock_rvc.f0method = "rmvpe"
+        mock_rvc.index_rate = 0.75
+        mock_rvc.filter_radius = 3
+        mock_rvc.resample_sr = 0
+        mock_rvc.rms_mix_rate = 0.25
+        mock_rvc.protect = 0.33
         server.rvc = mock_rvc
     yield
     server.rvc = original_rvc
@@ -174,22 +184,76 @@ def test_speak_options_preflight_no_origin(client):
 
 def test_speak_valid_request_returns_audio_wav(client):
     """Verify POST /speak returns HTTP 200 with audio/wav mimetype on successful synthesis."""
-    dummy_wav_bytes = b"RIFF....WAVEfmt ....data...."
+    dummy_audio_array = np.zeros(16000, dtype=np.int16)
 
     async def mock_synth(text, out_path):
         with open(out_path, "wb") as f:
             f.write(b"dummy_base_audio")
 
-    def mock_infer(in_path, out_path):
-        with open(out_path, "wb") as f:
-            f.write(dummy_wav_bytes)
+    if not hasattr(server.rvc, "models") or not isinstance(server.rvc.models, dict):
+        server.rvc.models = {server.rvc.current_model: {"index": ""}}
+    if not hasattr(server.rvc.vc, "tgt_sr") or not isinstance(server.rvc.vc.tgt_sr, int):
+        server.rvc.vc.tgt_sr = 40000
 
     with patch.object(server, "_synthesize_base", side_effect=mock_synth), \
-         patch.object(server.rvc, "infer_file", side_effect=mock_infer):
+         patch.object(server.rvc.vc, "vc_single", return_value=dummy_audio_array):
         response = client.post("/speak", json={"text": "Hôm nay trời rất đẹp."})
         assert response.status_code == 200
         assert response.mimetype == "audio/wav"
-        assert response.data == dummy_wav_bytes
+        assert response.data[:4] == b"RIFF"
+
+
+def test_speak_rvc_pipeline_error_returns_500_with_message(client):
+    """Verify POST /speak returns HTTP 500 with meaningful error when vc_single returns error tuple."""
+    async def mock_synth(text, out_path):
+        with open(out_path, "wb") as f:
+            f.write(b"dummy_base_audio")
+
+    if not hasattr(server.rvc, "models") or not isinstance(server.rvc.models, dict):
+        server.rvc.models = {server.rvc.current_model: {"index": ""}}
+
+    error_tuple = ("Model architecture mismatch: expected 256 dimensions but got 768", (None, None))
+
+    with patch.object(server, "_synthesize_base", side_effect=mock_synth), \
+         patch.object(server.rvc.vc, "vc_single", return_value=error_tuple):
+        response = client.post("/speak", json={"text": "Hôm nay trời rất đẹp."})
+        assert response.status_code == 500
+        data = response.get_json()
+        assert data is not None
+        assert "Lỗi pipeline RVC: Model architecture mismatch" in data.get("error", "")
+        assert "has no attribute 'dtype'" not in data.get("error", "")
+
+
+def test_run_rvc_inference_raises_on_tuple(tmp_path):
+    """Verify _run_rvc_inference raises RuntimeError with actual message when vc_single returns tuple."""
+    base_file = tmp_path / "base.mp3"
+    base_file.write_bytes(b"dummy")
+    out_file = tmp_path / "out.wav"
+
+    if not hasattr(server.rvc, "models") or not isinstance(server.rvc.models, dict):
+        server.rvc.models = {server.rvc.current_model: {"index": ""}}
+
+    error_tuple = ("Index file not found or corrupted", (None, None))
+
+    with patch.object(server.rvc.vc, "vc_single", return_value=error_tuple):
+        with pytest.raises(RuntimeError) as exc_info:
+            server._run_rvc_inference(str(base_file), str(out_file))
+        assert "Lỗi pipeline RVC: Index file not found or corrupted" in str(exc_info.value)
+
+
+def test_run_rvc_inference_raises_on_empty_tuple(tmp_path):
+    """Verify _run_rvc_inference raises RuntimeError with fallback message when tuple has no detail."""
+    base_file = tmp_path / "base.mp3"
+    base_file.write_bytes(b"dummy")
+    out_file = tmp_path / "out.wav"
+
+    if not hasattr(server.rvc, "models") or not isinstance(server.rvc.models, dict):
+        server.rvc.models = {server.rvc.current_model: {"index": ""}}
+
+    with patch.object(server.rvc.vc, "vc_single", return_value=()):
+        with pytest.raises(RuntimeError) as exc_info:
+            server._run_rvc_inference(str(base_file), str(out_file))
+        assert "Lỗi pipeline RVC: Lỗi không xác định từ pipeline RVC" in str(exc_info.value)
 
 
 def test_discover_model_paths_sorting_and_discovery(tmp_path):

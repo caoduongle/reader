@@ -19,6 +19,7 @@ import edge_tts
 import torch
 from flask import Flask, request, Response, jsonify
 from rvc_python.infer import RVCInference
+from scipy.io import wavfile
 
 # Thu muc chua chinh file server.py nay - dung lam goc cho moi duong dan ben duoi,
 # de du chay tu dau (terminal o thu muc khac, Task Scheduler, Startup...) van dung.
@@ -143,6 +144,43 @@ async def _synthesize_base(text: str, out_path: str):
     await edge_tts.Communicate(text, BASE_VOICE).save(out_path)
 
 
+def _run_rvc_inference(base_path: str, out_path: str):
+    """Chay RVC inference truc tiep qua rvc.vc.vc_single thay vi rvc.infer_file.
+
+    rvc-python==0.1.5 co bug: khi vc_single loi, no tra ve tuple (chuoi_loi, (None, None))
+    thay vi raise exception. infer_file khong check ma ghi thang vao wavfile.write(),
+    gay ra loi kho hieu "'tuple' object has no attribute 'dtype'" — che mat loi that su.
+    Ham nay bat dung tuple va raise RuntimeError voi noi dung loi that su.
+    """
+    if not rvc.current_model:
+        raise ValueError("Chưa tải model RVC.")
+
+    model_info = rvc.models[rvc.current_model]
+    file_index = model_info.get("index", "")
+
+    result = rvc.vc.vc_single(
+        sid=0,
+        input_audio_path=base_path,
+        f0_up_key=rvc.f0up_key,
+        f0_method=rvc.f0method,
+        file_index=file_index,
+        index_rate=rvc.index_rate,
+        filter_radius=rvc.filter_radius,
+        resample_sr=rvc.resample_sr,
+        rms_mix_rate=rvc.rms_mix_rate,
+        protect=rvc.protect,
+        f0_file="",
+        file_index2="",
+    )
+
+    if isinstance(result, tuple):
+        error_detail = result[0] if len(result) > 0 and result[0] else "Lỗi không xác định từ pipeline RVC"
+        raise RuntimeError(f"Lỗi pipeline RVC: {error_detail}")
+
+    wavfile.write(out_path, rvc.vc.tgt_sr, result)
+    return out_path
+
+
 @app.route("/speak", methods=["POST", "OPTIONS"])
 def speak():
     if request.method == "OPTIONS":
@@ -170,7 +208,7 @@ def speak():
         asyncio.run(_synthesize_base(text, base_path))
 
         with rvc_lock:
-            rvc.infer_file(base_path, out_path)
+            _run_rvc_inference(base_path, out_path)
 
         with open(out_path, "rb") as f:
             wav_bytes = f.read()
