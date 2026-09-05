@@ -1,19 +1,12 @@
 """
-Server TTS + RVC local cho extension "AI Doc Truyen".
+Server TTS + RVC local cho ung dung VoxRead (Electron desktop).
 
-Pipeline:  text --(Edge-TTS)--> giong doc nen (mp3)  --(RVC)--> giong cua ban (wav)
+Pipeline:  text --(Edge-TTS)--> giong doc nen (mp3)  --(RVC)--> giong ca nhan (wav)
 
-Extension (background.js) da goi san toi:
+App VoxRead Electron goi toi:
     POST http://localhost:8008/speak
     body: { "text": "...", "language": "vi" }
-    -> tra ve RAW BYTES cua file WAV (khong boc trong JSON)
-
-Nen KHONG can sua gi trong extension - server nay khop dung "hop dong" do.
-
-Chay:
-    python server.py
-Roi mo popup extension -> chon "Giong cua toi (server local)" -> Luu cai dat
--> vao trang muon nghe -> bam "Bat dau doc trang nay".
+    -> tra ve RAW BYTES cua file WAV (audio/wav)
 """
 
 import asyncio
@@ -30,13 +23,31 @@ from rvc_python.infer import RVCInference
 # de du chay tu dau (terminal o thu muc khac, Task Scheduler, Startup...) van dung.
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+
+def discover_model_paths(base_dir: str):
+    """
+    Quet thu muc model/ ben trong base_dir:
+    - MODEL_PATH: file .pth dau tien theo thu tu abc (hoac None neu khong co)
+    - INDEX_PATH: file .index dau tien theo thu tu abc (hoac "" neu khong co)
+    """
+    model_dir = os.path.join(base_dir, "model")
+    if not os.path.isdir(model_dir):
+        return None, ""
+
+    pth_files = sorted([f for f in os.listdir(model_dir) if f.endswith(".pth") and not f.startswith(".")])
+    index_files = sorted([f for f in os.listdir(model_dir) if f.endswith(".index") and not f.startswith(".")])
+
+    model_path = os.path.join(model_dir, pth_files[0]) if pth_files else None
+    index_path = os.path.join(model_dir, index_files[0]) if index_files else ""
+    return model_path, index_path
+
+
 # ============================================================
-#  CAU HINH — sua theo model ban da train o Google Colab
+#  CAU HINH
 # ============================================================
 
-# Duong dan toi 2 file lay tu Colab ve (giai nen tu ApplioExported/Chess.zip)
-MODEL_PATH = os.path.join(BASE_DIR, "model", "Chess_25e_12750s.pth")
-INDEX_PATH = os.path.join(BASE_DIR, "model", "Chess.index")     # de "" neu khong co file .index
+# Tu dong tim model trong thu muc python-backend/model/
+MODEL_PATH, INDEX_PATH = discover_model_paths(BASE_DIR)
 
 # Giong TTS nen (Edge-TTS) — nen chon giong CUNG GIOI TINH voi giong ban train
 # de RVC phai bien doi it nhat, chat luong ra tot nhat.
@@ -69,15 +80,23 @@ RVC_PARAMS = dict(
 app = Flask(__name__)
 rvc_lock = threading.Lock()  # tranh 2 request goi RVC cung luc (nhat la khi dung GPU)
 
-print("Dang tai model RVC ... (lan dau se tu tai them hubert_base.pt + rmvpe.pt, ~200-300MB)")
-rvc = RVCInference(
-    device=DEVICE,
-    model_path=MODEL_PATH,
-    index_path=INDEX_PATH,
-    version="v2",
-)
-rvc.set_params(**RVC_PARAMS)
-print(f"Model san sang. Server dang chay tai http://localhost:{PORT}  (giu cua so nay mo)")
+rvc = None
+if MODEL_PATH and os.path.isfile(MODEL_PATH):
+    try:
+        print(f"Dang tai model RVC tu: {MODEL_PATH} ... (lan dau se tu tai them hubert_base.pt + rmvpe.pt, ~200-300MB)")
+        rvc = RVCInference(
+            device=DEVICE,
+            model_path=MODEL_PATH,
+            index_path=INDEX_PATH,
+            version="v2",
+        )
+        rvc.set_params(**RVC_PARAMS)
+        print(f"Model san sang ({os.path.basename(MODEL_PATH)}). Server dang chay tai http://localhost:{PORT}  (giu cua so nay mo)")
+    except Exception as e:
+        rvc = None
+        print(f"[VoxRead] Loi khi khoi tao model RVC ({MODEL_PATH}): {e}")
+else:
+    print("[VoxRead] Canh bao: Chua co model giong RVC (.pth) trong thu muc python-backend/model/, tinh nang RVC se khong kha dung cho toi khi ban them model.")
 
 
 async def _synthesize_base(text: str, out_path: str):
@@ -91,6 +110,11 @@ async def _synthesize_base(text: str, out_path: str):
 def speak():
     if request.method == "OPTIONS":
         return Response(status=204)
+
+    if rvc is None:
+        return jsonify({
+            "error": "Chưa có model giọng RVC (.pth) trong thư mục python-backend/model/. Vui lòng copy file .pth (và .index nếu có) vào thư mục python-backend/model/ rồi restart server."
+        }), 503
 
     data = request.get_json(force=True, silent=True) or {}
     text = (data.get("text") or "").strip()
@@ -133,7 +157,7 @@ def speak():
 def _add_cors_headers(resp):
     origin = request.headers.get("Origin")
     allowed_origins = {"http://localhost:3000", "http://127.0.0.1:3000", "null"}
-    if origin and (origin in allowed_origins or origin.startswith("chrome-extension://")):
+    if origin and origin in allowed_origins:
         resp.headers["Access-Control-Allow-Origin"] = origin
         resp.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
         resp.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
@@ -144,7 +168,8 @@ def _add_cors_headers(resp):
 
 @app.route("/health", methods=["GET"])
 def health():
-    return jsonify({"ok": True, "model_loaded": rvc.current_model is not None})
+    model_loaded = rvc is not None and getattr(rvc, "current_model", None) is not None
+    return jsonify({"ok": True, "model_loaded": bool(model_loaded)})
 
 
 if __name__ == "__main__":

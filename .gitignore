@@ -5,9 +5,10 @@ node_modules/
 build/
 dist/
 dist-electron/
-dist-app/
 release/
 coverage/
+*.tsbuildinfo
+.eslintcache
 
 # OS and temporary files
 .DS_Store
@@ -38,6 +39,7 @@ venv/
 **/.venv/
 __pycache__/
 **/__pycache__/
+.pytest_cache/
 *.py[cod]
 *.egg-info/
 **/*.egg-info/
@@ -50,7 +52,7 @@ __pycache__/
 *.index
 *.onnx
 *.safetensors
-model/
+python-backend/model/*
 !python-backend/model/.gitkeep
 
 # Package Manager Lockfile Hygiene (Standardized on npm)

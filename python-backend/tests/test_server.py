@@ -26,6 +26,18 @@ def client():
         yield client
 
 
+@pytest.fixture(autouse=True)
+def ensure_mock_rvc_when_empty():
+    """Ensure tests that require an active rvc instance have one even in CI."""
+    original_rvc = server.rvc
+    if server.rvc is None:
+        mock_rvc = MagicMock()
+        mock_rvc.current_model = "mock_model"
+        server.rvc = mock_rvc
+    yield
+    server.rvc = original_rvc
+
+
 def test_health_endpoint_returns_ok(client):
     """Verify GET /health returns HTTP 200 with status and model loading flag."""
     response = client.get("/health")
@@ -35,6 +47,15 @@ def test_health_endpoint_returns_ok(client):
     assert data is not None
     assert data.get("ok") is True
     assert "model_loaded" in data
+
+
+def test_health_endpoint_when_no_model(client):
+    """Verify GET /health reports model_loaded=False when rvc is None."""
+    with patch.object(server, "rvc", None):
+        response = client.get("/health")
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["model_loaded"] is False
 
 
 def test_speak_endpoint_rejects_missing_text(client):
@@ -58,6 +79,18 @@ def test_speak_endpoint_rejects_whitespace_text(client):
     assert "error" in data
 
 
+def test_speak_without_model_returns_503(client):
+    """Verify POST /speak returns HTTP 503 when no RVC model is loaded."""
+    with patch.object(server, "rvc", None):
+        response = client.post("/speak", json={"text": "Xin chào thế giới."})
+        assert response.status_code == 503
+
+        data = response.get_json()
+        assert data is not None
+        assert "error" in data
+        assert "python-backend/model/" in data["error"]
+
+
 def test_speak_options_preflight_authorized_origin(client):
     """Verify OPTIONS /speak with whitelisted Origin returns HTTP 204 and echoes Origin."""
     response = client.options("/speak", headers={"Origin": "http://localhost:3000"})
@@ -69,6 +102,13 @@ def test_speak_options_preflight_authorized_origin(client):
 def test_speak_options_preflight_unauthorized_origin(client):
     """Verify OPTIONS /speak with untrusted Origin returns HTTP 204 without CORS headers."""
     response = client.options("/speak", headers={"Origin": "https://trang-la.evil"})
+    assert response.status_code == 204
+    assert response.headers.get("Access-Control-Allow-Origin") is None
+
+
+def test_speak_options_preflight_chrome_extension_rejected(client):
+    """Verify OPTIONS /speak rejects chrome-extension:// origins (no CORS header returned)."""
+    response = client.options("/speak", headers={"Origin": "chrome-extension://abcdefghijklmnop"})
     assert response.status_code == 204
     assert response.headers.get("Access-Control-Allow-Origin") is None
 
@@ -98,3 +138,39 @@ def test_speak_valid_request_returns_audio_wav(client):
         assert response.status_code == 200
         assert response.mimetype == "audio/wav"
         assert response.data == dummy_wav_bytes
+
+
+def test_discover_model_paths_sorting_and_discovery(tmp_path):
+    """Verify discover_model_paths correctly discovers and sorts .pth and .index files."""
+    model_dir = tmp_path / "model"
+    model_dir.mkdir()
+
+    # Create dummy files
+    (model_dir / ".gitkeep").touch()
+    (model_dir / "zebra_model.pth").touch()
+    (model_dir / "alpha_model.pth").touch()
+    (model_dir / "zeta.index").touch()
+    (model_dir / "beta.index").touch()
+
+    model_path, index_path = server.discover_model_paths(str(tmp_path))
+
+    assert model_path == str(model_dir / "alpha_model.pth")
+    assert index_path == str(model_dir / "beta.index")
+
+
+def test_discover_model_paths_no_model(tmp_path):
+    """Verify discover_model_paths returns (None, '') when directory has no .pth files."""
+    model_dir = tmp_path / "model"
+    model_dir.mkdir()
+    (model_dir / ".gitkeep").touch()
+
+    model_path, index_path = server.discover_model_paths(str(tmp_path))
+    assert model_path is None
+    assert index_path == ""
+
+
+def test_discover_model_paths_missing_dir(tmp_path):
+    """Verify discover_model_paths returns (None, '') when model/ directory does not exist."""
+    model_path, index_path = server.discover_model_paths(str(tmp_path / "nonexistent"))
+    assert model_path is None
+    assert index_path == ""

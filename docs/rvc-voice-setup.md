@@ -1,25 +1,25 @@
 # Hướng dẫn huấn luyện & cài đặt mô hình giọng nói RVC
 
-Tài liệu này hướng dẫn chi tiết quy trình chuẩn bị dữ liệu, huấn luyện mô hình giọng nói AI (Retrieval-based Voice Conversion) bằng Applio trên Google Colab miễn phí, và cách cài đặt chạy trên máy cá nhân để tích hợp với VoxRead hoặc tiện ích mở rộng.
+Tài liệu này hướng dẫn chi tiết quy trình chuẩn bị dữ liệu, huấn luyện mô hình giọng nói AI (Retrieval-based Voice Conversion) bằng Applio trên Google Colab miễn phí, và cách cài đặt chạy trên máy cá nhân để tích hợp với ứng dụng đọc sách VoxRead.
 
 ---
 
 ## Kiến trúc tổng thể
 
 ```
-Văn bản / Trang sách  →  Ứng dụng đọc / Extension  →  http://localhost:8008/speak  →  server.py
-                                                                                       │
-                                                                       Edge-TTS ───────┤─────── RVC (model của bạn)
-                                                                     (giọng đọc nền)  │      (đổi âm sắc)
-                                                                                       ▼
-                                                                                 audio WAV trả về
+Văn bản / Trang sách  →  Ứng dụng VoxRead  →  http://localhost:8008/speak  →  server.py
+                                                                               │
+                                                               Edge-TTS ───────┤─────── RVC (model của bạn)
+                                                             (giọng đọc nền)  │      (đổi âm sắc)
+                                                                               ▼
+                                                                         audio WAV trả về
 ```
 
 3 việc cần làm, theo đúng thứ tự:
 
 - **Phần A** — Train model giọng của bạn trên Google Colab (miễn phí)
-- **Phần B** — Cài & chạy `server.py` trên máy, trỏ vào model vừa train
-- **Phần C** — Bật ứng dụng đọc sách / extension, chọn nguồn giọng "local"
+- **Phần B** — Cài & chạy `server.py` trên máy, copy model vào `python-backend/model/`
+- **Phần C** — Bật ứng dụng VoxRead, chọn nguồn giọng "Giọng của tôi (Local RVC)"
 
 ---
 
@@ -195,19 +195,15 @@ pip install torch==2.1.1+cu118 torchaudio==2.1.1+cu118 --index-url https://downl
 **Nếu không có GPU riêng** — không cần làm gì thêm, `requirements.txt` đã kéo theo bản CPU sẵn.
 Chỉ cần mở `server.py`, đổi `DEVICE = "cuda:0"` thành `DEVICE = "cpu:0"`.
 
-### B3. Đặt file model vào đúng chỗ
+### B3. Đặt file model vào thư mục model/
 
-Copy 2 file `.pth` và `.index` đã tải từ Colab (Phần A4) vào thư mục `python-backend/model/` (hoặc `model/`).
-Mở `python-backend/server.py`, sửa cấu hình cho khớp tên file thật của bạn:
+Copy 2 file `.pth` và `.index` đã tải từ Colab (Phần A4) vào thư mục `python-backend/model/`.
+Hệ thống sẽ **tự động quét và nhận diện** file `.pth` và `.index` đầu tiên theo thứ tự abc — bạn **hoàn toàn không cần sửa code** trong `server.py`!
 
-```python
-MODEL_PATH = os.path.join(BASE_DIR, "model", "my_voice_v1.pth")
-INDEX_PATH = os.path.join(BASE_DIR, "model", "my_voice_v1.index")
-DEVICE = "cuda:0"          # hoặc "cpu:0" nếu không có GPU NVIDIA
-```
-
-Ngoài ra có thể chỉnh `BASE_VOICE` (giọng Edge-TTS đọc nền — nên chọn cùng giới tính với giọng
-bạn train để RVC biến đổi ít nhất, ra chất lượng tốt nhất) và `PITCH_SHIFT` nếu nghe lệch tông.
+> [!TIP]
+> - Nếu thư mục có nhiều model, server sẽ ưu tiên chọn file `.pth` đầu tiên theo thứ tự bảng chữ cái.
+> - Nếu model không có file `.index` đi kèm, RVC vẫn hoạt động tốt mà không cần index.
+> - Ngoài ra, bạn vẫn có thể chỉnh `BASE_VOICE` (giọng Edge-TTS đọc nền) và `PITCH_SHIFT` trong `python-backend/server.py` nếu nghe lệch tông.
 
 ### B4. Chạy server
 
@@ -227,9 +223,7 @@ là xong — **giữ cửa sổ terminal này mở** trong lúc sử dụng. Ki�
 
 ---
 
-## PHẦN C — Kết nối giọng đọc vào ứng dụng
-
-### 1. Dùng với ứng dụng VoxRead (Desktop / Web)
+## PHẦN C — Kết nối giọng đọc vào ứng dụng VoxRead
 
 1. Mở VoxRead (chạy bản Electron hoặc trình duyệt tại `http://localhost:3000`).
 2. Bấm icon **Cài đặt** (Settings) ở thanh điều hướng trên cùng.
@@ -237,14 +231,6 @@ là xong — **giữ cửa sổ terminal này mở** trong lúc sử dụng. Ki�
 4. Bấm **"Kiểm tra kết nối"** để đảm bảo trạng thái báo xanh (Đang hoạt động).
 5. Bấm **"Thử giọng"** để nghe câu chào mẫu, sau đó bấm **"Lưu cài đặt"**.
 6. Chọn bất kỳ cuốn sách hoặc chương truyện nào để bắt đầu trải nghiệm đọc bằng giọng của bạn!
-
-### 2. Dùng với extension (Legacy Chrome Extension)
-
-Nếu bạn vẫn sử dụng tiện ích mở rộng Chrome cũ:
-
-1. Mở trang quản lý extension (`chrome://extensions` → bật **Developer mode** → **Load unpacked**).
-2. Bấm icon extension → mục **Nguồn giọng đọc**, chọn **"Giọng của tôi (server local)"** → **Lưu cài đặt**.
-3. Mở trang muốn nghe → bấm icon extension → **▶ Bắt đầu đọc trang này**.
 
 ---
 
