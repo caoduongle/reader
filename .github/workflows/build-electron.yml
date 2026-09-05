@@ -10,6 +10,11 @@ jobs:
   build-windows:
     name: Build Windows Installer (.exe)
     runs-on: windows-latest
+    # Note: 'contents: write' is required for electron-builder to create GitHub Releases and upload release binaries.
+    # If this workflow is ever triggered from a fork or pull_request, GITHUB_TOKEN is restricted to read-only
+    # by GitHub security policy; publishing from a fork requires a custom PAT.
+    permissions:
+      contents: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
