@@ -16,6 +16,7 @@ import threading
 import traceback
 
 import edge_tts
+import torch
 from flask import Flask, request, Response, jsonify
 from rvc_python.infer import RVCInference
 
@@ -60,9 +61,20 @@ BASE_VOICE = "vi-VN-NamMinhNeural"
 # +12 neu giong nen la Nam nhung giong dich la Nu, -12 neu nguoc lai.
 PITCH_SHIFT = 0
 
-# "cuda:0" neu may co GPU NVIDIA (da cai dung ban torch+CUDA, xem README).
-# "cpu:0" neu khong co GPU rieng — van chay duoc, chi cham hon.
-DEVICE = "cuda:0"
+
+def detect_device() -> str:
+    """
+    Tu dong detect GPU bang torch, khong can nguoi dung sua tay.
+    Cho phep override qua bien moi truong VOXREAD_DEVICE neu can.
+    """
+    override = os.environ.get("VOXREAD_DEVICE", "").strip()
+    if override:
+        return override
+    return "cuda:0" if torch.cuda.is_available() else "cpu:0"
+
+
+DEVICE = detect_device()
+print(f"[VoxRead] Dang dung thiet bi: {DEVICE}")
 
 PORT = 8008
 
@@ -83,6 +95,7 @@ app = Flask(__name__)
 rvc_lock = threading.Lock()  # tranh 2 request goi RVC cung luc (nhat la khi dung GPU)
 
 rvc = None
+last_init_error: str | None = None
 
 
 def reload_model():
@@ -90,7 +103,7 @@ def reload_model():
     Quet lai thu muc model/ va khoi tao lai RVCInference.
     Tra ve True neu load duoc model, False neu khong co model hoac gap loi.
     """
-    global MODEL_PATH, INDEX_PATH, rvc
+    global MODEL_PATH, INDEX_PATH, rvc, last_init_error
     MODEL_PATH, INDEX_PATH = discover_model_paths(BASE_DIR)
     if MODEL_PATH and os.path.isfile(MODEL_PATH):
         try:
@@ -103,14 +116,17 @@ def reload_model():
             )
             new_rvc.set_params(**RVC_PARAMS)
             rvc = new_rvc
+            last_init_error = None
             print(f"Model san sang ({os.path.basename(MODEL_PATH)}). Server dang chay tai http://localhost:{PORT}  (giu cua so nay mo)")
             return True
         except Exception as e:
             rvc = None
-            print(f"[VoxRead] Loi khi khoi tao model RVC ({MODEL_PATH}): {e}")
+            last_init_error = f"Lỗi khởi tạo model RVC ({os.path.basename(MODEL_PATH)}): {str(e)}"
+            print(f"[VoxRead] {last_init_error}")
             return False
     else:
         rvc = None
+        last_init_error = "Chưa có model giọng RVC (.pth) trong thư mục python-backend/model."
         print("[VoxRead] Canh bao: Chua co model giong RVC (.pth) trong thu muc python-backend/model/, tinh nang RVC se khong kha dung cho toi khi ban them model.")
         return False
 
@@ -133,8 +149,9 @@ def speak():
         return Response(status=204)
 
     if rvc is None:
+        error_msg = last_init_error or "Chưa có model giọng RVC (.pth) trong thư mục python-backend/model/. Vui lòng copy file .pth (và .index nếu có) vào thư mục python-backend/model/ rồi restart server."
         return jsonify({
-            "error": "Chưa có model giọng RVC (.pth) trong thư mục python-backend/model/. Vui lòng copy file .pth (và .index nếu có) vào thư mục python-backend/model/ rồi restart server."
+            "error": error_msg
         }), 503
 
     data = request.get_json(force=True, silent=True) or {}
@@ -162,7 +179,7 @@ def speak():
 
     except Exception as e:
         traceback.print_exc()
-        return jsonify({"error": "Đã xảy ra lỗi khi tổng hợp giọng nói."}), 500
+        return jsonify({"error": f"Đã xảy ra lỗi khi tổng hợp giọng nói: {str(e)}"}), 500
 
     finally:
         for p in (base_path, out_path):
@@ -198,12 +215,16 @@ def health():
             "model_name": os.path.basename(MODEL_PATH) if MODEL_PATH else None,
             "index_name": os.path.basename(INDEX_PATH) if INDEX_PATH else None,
             "model_dir": model_dir,
+            "device": DEVICE,
         })
+    reason = "model_init_failed" if (MODEL_PATH and os.path.isfile(MODEL_PATH)) else "model_missing"
     return jsonify({
         "ok": False,
-        "reason": "model_missing",
+        "reason": reason,
         "model_loaded": False,
         "model_dir": model_dir,
+        "error": last_init_error or "Chưa có file model (.pth) trong thư mục python-backend/model.",
+        "device": DEVICE,
     })
 
 
@@ -235,12 +256,16 @@ def model_reload():
             "model_name": os.path.basename(MODEL_PATH) if MODEL_PATH else None,
             "index_name": os.path.basename(INDEX_PATH) if INDEX_PATH else None,
             "model_dir": model_dir,
+            "device": DEVICE,
         })
+    reason = "model_init_failed" if (MODEL_PATH and os.path.isfile(MODEL_PATH)) else "model_missing"
     return jsonify({
         "ok": False,
-        "reason": "model_missing",
+        "reason": reason,
         "model_loaded": False,
         "model_dir": model_dir,
+        "error": last_init_error or "Chưa có file model (.pth) trong thư mục python-backend/model.",
+        "device": DEVICE,
     })
 
 

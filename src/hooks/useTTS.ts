@@ -160,17 +160,21 @@ export function useTTS(
       clearTimeout(timeoutId);
       if (res.ok) {
         const data = await res.json();
-        if (data.ok && data.model_loaded) {
+        if (data && data.ok === true && data.model_loaded === true) {
           setRvcServerStatus('connected');
           setServerErrorMessage(null);
           return true;
-        } else if (data.reason === 'model_missing' || !data.model_loaded) {
-          setRvcServerStatus('model_missing');
-          setServerErrorMessage('Chưa có file model (.pth) trong thư mục python-backend/model');
+        } else if (data && !data.model_loaded) {
+          setRvcServerStatus('no-model');
+          const errorMsg =
+            data.error ||
+            'Server đang chạy nhưng chưa có model giọng hợp lệ (kiểm tra terminal server.py để xem lỗi chi tiết).';
+          setServerErrorMessage(errorMsg);
           return false;
         }
       }
       setRvcServerStatus('unreachable');
+      setServerErrorMessage('Server phản hồi nhưng trạng thái không sẵn sàng');
       return false;
     } catch (err: unknown) {
       setRvcServerStatus('unreachable');
@@ -306,7 +310,16 @@ export function useTTS(
         });
 
         if (!res.ok) {
-          throw new Error(`Server returned status ${res.status}`);
+          let errorDetail = `Lỗi server (${res.status}): Không thể tạo giọng đọc`;
+          try {
+            const errData = await res.json();
+            if (errData && typeof errData.error === 'string') {
+              errorDetail = errData.error;
+            }
+          } catch {
+            // fallback
+          }
+          throw new Error(errorDetail);
         }
 
         const blob = await res.blob();
@@ -318,7 +331,9 @@ export function useTTS(
         if (err instanceof Error && err.name === 'AbortError') {
           return null;
         }
-        console.warn('RVC speech synthesis fetch failed:', err);
+        const errorMsg = err instanceof Error ? err.message : 'Lỗi kết nối server giọng đọc';
+        console.warn('RVC speech synthesis fetch failed:', errorMsg);
+        setServerErrorMessage(errorMsg);
         return null;
       }
     },
@@ -508,8 +523,7 @@ export function useTTS(
         if (isPlayingRef.current && currentIdxRef.current === index) {
           setIsPlaying(false);
           setIsPaused(false);
-          setRvcServerStatus('unreachable');
-          setServerErrorMessage('Không thể tạo âm thanh từ server RVC.');
+          setServerErrorMessage(prev => prev || 'Không thể tạo âm thanh từ server RVC.');
         }
         return;
       }
@@ -752,7 +766,16 @@ export function useTTS(
           });
 
           if (!res.ok) {
-            throw new Error(`Server status ${res.status}`);
+            let errorDetail = `Lỗi server (${res.status}): Không thể tạo giọng đọc`;
+            try {
+              const errData = await res.json();
+              if (errData && typeof errData.error === 'string') {
+                errorDetail = errData.error;
+              }
+            } catch {
+              // fallback
+            }
+            throw new Error(errorDetail);
           }
 
           const blob = await res.blob();
@@ -770,9 +793,10 @@ export function useTTS(
               URL.revokeObjectURL(blobUrl);
             };
           }
-        } catch (err) {
-          console.warn('RVC testVoice failed:', err);
-          setRvcServerStatus('unreachable');
+        } catch (err: unknown) {
+          const errorMsg = err instanceof Error ? err.message : 'Lỗi khi thử giọng';
+          console.warn('RVC testVoice failed:', errorMsg);
+          setServerErrorMessage(errorMsg);
         }
         return;
       }

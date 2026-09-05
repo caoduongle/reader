@@ -21,7 +21,13 @@ export interface TTSVoiceOption {
 
 export type TTSProvider = 'browser' | 'rvc-local';
 
-export type RVCServerStatus = 'unknown' | 'checking' | 'connected' | 'model_missing' | 'unreachable';
+export type RVCServerStatus =
+  | 'unknown'
+  | 'checking'
+  | 'connected'
+  | 'no-model'
+  | 'model_missing'
+  | 'unreachable';
 
 export interface TTSSettings {
   ttsProvider: TTSProvider;

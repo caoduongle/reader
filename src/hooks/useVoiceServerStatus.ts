@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 export type VoiceServerConnectionStatus =
   | 'checking'
   | 'connected'
+  | 'no-model'
   | 'model_missing'
   | 'unreachable';
 
@@ -10,9 +11,11 @@ export interface HealthResponse {
   ok: boolean;
   model_loaded: boolean;
   reason?: string;
+  error?: string | null;
   model_dir?: string;
   model_name?: string;
   index_name?: string;
+  device?: string;
 }
 
 export interface UseVoiceServerStatusOptions {
@@ -70,11 +73,14 @@ export function useVoiceServerStatus({
             setErrorMessage(null);
             setIsChecking(false);
             return true;
-          } else if (data.reason === 'model_missing' || !data.model_loaded) {
-            setStatus('model_missing');
+          } else if (!data.model_loaded) {
+            setStatus('no-model');
             setModelDir(data.model_dir || null);
             setModelName(null);
-            setErrorMessage('Chưa có file model (.pth) trong thư mục');
+            setErrorMessage(
+              data.error ||
+                'Server đang chạy nhưng chưa có model giọng hợp lệ (kiểm tra terminal server.py để xem lỗi chi tiết).'
+            );
             setIsChecking(false);
             return false;
           }

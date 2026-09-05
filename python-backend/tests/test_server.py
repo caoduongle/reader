@@ -52,7 +52,7 @@ def test_health_endpoint_returns_ok(client):
 
 def test_health_endpoint_when_no_model(client):
     """Verify GET /health reports ok=False, reason=model_missing, model_loaded=False when rvc is None."""
-    with patch.object(server, "rvc", None):
+    with patch.object(server, "rvc", None), patch.object(server, "MODEL_PATH", None):
         response = client.get("/health")
         assert response.status_code == 200
         data = response.get_json()
@@ -60,6 +60,40 @@ def test_health_endpoint_when_no_model(client):
         assert data["reason"] == "model_missing"
         assert data["model_loaded"] is False
         assert "model_dir" in data
+        assert "error" in data
+        assert "device" in data
+
+
+def test_health_endpoint_when_init_failed(client, tmp_path):
+    """Verify GET /health reports reason=model_init_failed and error details when model file exists but init failed."""
+    dummy_model = tmp_path / "corrupt.pth"
+    dummy_model.touch()
+    with patch.object(server, "rvc", None), \
+         patch.object(server, "MODEL_PATH", str(dummy_model)), \
+         patch.object(server, "last_init_error", "Lỗi khởi tạo model RVC: invalid checkpoint"):
+        response = client.get("/health")
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["ok"] is False
+        assert data["reason"] == "model_init_failed"
+        assert data["model_loaded"] is False
+        assert "invalid checkpoint" in data["error"]
+
+
+def test_detect_device_behavior():
+    """Verify detect_device chooses cuda:0 if available, cpu:0 if not, and respects VOXREAD_DEVICE override."""
+    with patch.dict(os.environ, {"VOXREAD_DEVICE": "cpu:0"}):
+        assert server.detect_device() == "cpu:0"
+
+    with patch.dict(os.environ, {"VOXREAD_DEVICE": "cuda:1"}):
+        assert server.detect_device() == "cuda:1"
+
+    with patch.dict(os.environ, {"VOXREAD_DEVICE": ""}):
+        with patch("torch.cuda.is_available", return_value=True):
+            assert server.detect_device() == "cuda:0"
+        with patch("torch.cuda.is_available", return_value=False):
+            assert server.detect_device() == "cpu:0"
+
 
 
 
@@ -86,7 +120,7 @@ def test_speak_endpoint_rejects_whitespace_text(client):
 
 def test_speak_without_model_returns_503(client):
     """Verify POST /speak returns HTTP 503 when no RVC model is loaded."""
-    with patch.object(server, "rvc", None):
+    with patch.object(server, "rvc", None), patch.object(server, "last_init_error", None):
         response = client.post("/speak", json={"text": "Xin chào thế giới."})
         assert response.status_code == 503
 
@@ -94,6 +128,19 @@ def test_speak_without_model_returns_503(client):
         assert data is not None
         assert "error" in data
         assert "python-backend/model/" in data["error"]
+
+
+def test_speak_without_model_custom_error(client):
+    """Verify POST /speak returns custom initialization error in HTTP 503 response."""
+    custom_err = "Lỗi khởi tạo model RVC: corrupt weights"
+    with patch.object(server, "rvc", None), patch.object(server, "last_init_error", custom_err):
+        response = client.post("/speak", json={"text": "Xin chào thế giới."})
+        assert response.status_code == 503
+
+        data = response.get_json()
+        assert data is not None
+        assert data.get("error") == custom_err
+
 
 
 def test_speak_options_preflight_authorized_origin(client):

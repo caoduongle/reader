@@ -66,7 +66,7 @@ describe('useVoiceServerStatus hook', () => {
     expect(result.current.errorMessage).toBe('Failed to fetch: Connection refused');
   });
 
-  it('transitions to model_missing when /health returns reason: model_missing or model_loaded: false', async () => {
+  it('transitions to no-model when /health returns model_loaded: false', async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -74,6 +74,7 @@ describe('useVoiceServerStatus hook', () => {
         reason: 'model_missing',
         model_loaded: false,
         model_dir: 'E:\\reader\\python-backend\\model',
+        error: 'Chưa có file model (.pth) trong thư mục python-backend/model',
       }),
     });
     vi.stubGlobal('fetch', mockFetch);
@@ -90,10 +91,38 @@ describe('useVoiceServerStatus hook', () => {
       await Promise.resolve();
     });
 
-    expect(result.current.status).toBe('model_missing');
+    expect(result.current.status).toBe('no-model');
     expect(result.current.modelDir).toBe('E:\\reader\\python-backend\\model');
     expect(result.current.modelName).toBeNull();
-    expect(result.current.errorMessage).toContain('Chưa có file model');
+    expect(result.current.errorMessage).toBe(
+      'Chưa có file model (.pth) trong thư mục python-backend/model'
+    );
+  });
+
+  it('transitions to no-model with fallback message when data.error is missing and model_loaded: false', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ok: true,
+        model_loaded: false,
+      }),
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    const { result } = renderHook(() =>
+      useVoiceServerStatus({
+        serverUrl: 'http://localhost:8008',
+        enabled: true,
+        intervalMs: 5000,
+      })
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(result.current.status).toBe('no-model');
+    expect(result.current.errorMessage).toContain('chưa có model giọng hợp lệ');
   });
 
   it('triggers reloadModel via POST /model/reload and calls checkHealth', async () => {
@@ -128,7 +157,7 @@ describe('useVoiceServerStatus hook', () => {
     await act(async () => {
       await Promise.resolve();
     });
-    expect(result.current.status).toBe('model_missing');
+    expect(result.current.status).toBe('no-model');
 
     let reloadSuccess = false;
     await act(async () => {

@@ -229,6 +229,13 @@ export default function App() {
     handleChapterComplete
   );
 
+  // Surface RVC server error toast during reading if Settings modal is closed
+  useEffect(() => {
+    if (serverErrorMessage && !isSettingsOpen && settings.ttsProvider === 'rvc-local') {
+      showToast(serverErrorMessage);
+    }
+  }, [serverErrorMessage, isSettingsOpen, settings.ttsProvider, showToast]);
+
   // Switch document
   const handleDocumentLoaded = (newDoc: DocumentItem) => {
     stop();

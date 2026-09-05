@@ -68,6 +68,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   settings,
   voices,
   rvcServerStatus,
+  serverErrorMessage,
   onCheckRVCHealth,
   onSaveSettings,
   onTestVoice,
@@ -84,6 +85,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     modelDir: polledModelDir,
     modelName: polledModelName,
     reloadModel,
+    errorMessage: polledErrorMessage,
   } = useVoiceServerStatus({
     serverUrl: localSettings.rvcServerUrl || 'http://localhost:8008',
     enabled: isOpen && localSettings.ttsProvider === 'rvc-local',
@@ -485,7 +487,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         className={`w-2.5 h-2.5 rounded-full ${
                           effectiveStatus === 'connected'
                             ? 'bg-emerald-500 ring-2 ring-emerald-500/30'
-                            : effectiveStatus === 'model_missing'
+                            : effectiveStatus === 'no-model' || effectiveStatus === 'model_missing'
                               ? 'bg-amber-500 ring-2 ring-amber-500/30'
                               : effectiveStatus === 'checking'
                                 ? 'bg-amber-500 animate-pulse'
@@ -495,7 +497,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <span className="text-xs font-mono text-slate-300">
                         {effectiveStatus === 'connected'
                           ? 'Đã kết nối'
-                          : effectiveStatus === 'model_missing'
+                          : effectiveStatus === 'no-model' || effectiveStatus === 'model_missing'
                             ? 'Chưa có model'
                             : effectiveStatus === 'checking'
                               ? 'Đang kiểm tra...'
@@ -601,20 +603,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </div>
                   </div>
 
-                  {/* Warning banner when model is missing */}
-                  {effectiveStatus === 'model_missing' && (
+                  {/* Warning banner when model is missing or failed */}
+                  {(effectiveStatus === 'no-model' || effectiveStatus === 'model_missing') && (
                     <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start space-x-2.5 text-xs text-amber-300">
                       <AlertCircle className="w-4 h-4 shrink-0 text-amber-400 mt-0.5" />
                       <div className="space-y-2 flex-1">
                         <div className="font-semibold text-amber-200">
-                          Server giọng đọc đang chạy nhưng chưa có file model (.pth/.index)
+                          Server giọng đọc đang chạy nhưng chưa có model hợp lệ
                         </div>
-                        <div className="text-[11px] text-amber-300/80 leading-relaxed">
-                          Chưa có model trong thư mục{' '}
-                          <code className="mx-1 px-1.5 py-0.5 bg-black/40 rounded text-amber-300 font-mono">
-                            {modelInfo?.modelDir || polledModelDir || 'python-backend/model'}
-                          </code>
-                          . Thêm model của bạn để bắt đầu dùng giọng đọc riêng.
+                        <div className="text-[11px] text-amber-300/90 leading-relaxed">
+                          {serverErrorMessage || polledErrorMessage || (
+                            <>
+                              Chưa có model trong thư mục{' '}
+                              <code className="mx-1 px-1.5 py-0.5 bg-black/40 rounded text-amber-300 font-mono">
+                                {modelInfo?.modelDir || polledModelDir || 'python-backend/model'}
+                              </code>
+                              . Thêm model của bạn để bắt đầu dùng giọng đọc riêng.
+                            </>
+                          )}
                         </div>
                         <div className="flex items-center gap-2 pt-1">
                           <button
@@ -639,6 +645,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </div>
                   )}
 
+                  {/* Warning banner when test voice failed while connected */}
+                  {effectiveStatus === 'connected' && serverErrorMessage && (
+                    <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-start space-x-2.5 text-xs text-rose-300">
+                      <AlertCircle className="w-4 h-4 shrink-0 text-rose-400 mt-0.5" />
+                      <div className="flex-1 space-y-1">
+                        <div className="font-semibold text-rose-200">Lỗi khi thử giọng</div>
+                        <div className="text-[11px] text-rose-300/90 leading-relaxed">
+                          {serverErrorMessage}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Warning banner when unreachable */}
                   {effectiveStatus === 'unreachable' && (
                     <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-start space-x-2.5 text-xs text-rose-300">
@@ -648,6 +667,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           Không kết nối được server giọng đọc tại{' '}
                           {localSettings.rvcServerUrl || 'http://localhost:8008'}
                         </div>
+                        {serverErrorMessage && (
+                          <div className="text-[11px] text-rose-300 font-mono bg-black/30 px-2 py-1 rounded border border-rose-500/20">
+                            {serverErrorMessage}
+                          </div>
+                        )}
                         <div className="text-[11px] text-rose-300/80 leading-relaxed">
                           Server Python có đang chạy không? Hãy chạy{' '}
                           <code className="mx-1 px-1.5 py-0.5 bg-black/40 rounded text-amber-300 font-mono">
