@@ -6,7 +6,7 @@ import { Readability } from '@mozilla/readability';
 import { JSDOM } from 'jsdom';
 
 // Security modules & middleware
-import { assertPublicHost } from './lib/ssrfGuard.js';
+import { safeFetchHtml, SafeFetchError, htmlToParagraphText } from './lib/safeFetch.js';
 import {
   aiRateLimiter,
   globalRateLimiter,
@@ -146,88 +146,135 @@ app.post(
   }
 );
 
-// Web article extraction endpoint using Mozilla Readability (FR-006, FR-014, FR-015)
+// Web article extraction endpoint using Mozilla Readability with Gemini AI fallback
 app.post(
   '/api/fetch-url',
   validateBody(fetchUrlSchema),
   async (req, res, next) => {
     const { url } = req.body;
 
-    let parsedUrl;
+    let fetchResult;
     try {
-      parsedUrl = new URL(url.trim());
-      if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
-        throw new Error('Invalid protocol');
-      }
-    } catch {
-      return res.status(400).json({
-        ok: false,
-        error: 'Địa chỉ liên kết (URL) không hợp lệ. Vui lòng nhập URL bắt đầu bằng http:// hoặc https://.',
-      });
-    }
-
-    // Prevent SSRF: block private, intranet, and loopback hosts
-    try {
-      await assertPublicHost(parsedUrl.hostname);
-    } catch {
-      return res.status(400).json({
-        ok: false,
-        error: 'Không thể truy cập địa chỉ nội bộ hoặc riêng tư từ tính năng này.',
-      });
-    }
-
-    try {
-      const response = await fetch(parsedUrl.toString(), {
-        signal: AbortSignal.timeout(10000),
-        headers: {
-          'User-Agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 VoxRead/1.0',
-          Accept:
-            'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          'Accept-Language': 'vi,en-US;q=0.9,en;q=0.8',
-        },
-      });
-
-      if (!response.ok) {
-        return res.status(response.status >= 500 ? 502 : response.status).json({
-          ok: false,
-          error: `Không thể tải trang web (mã lỗi HTTP ${response.status}). Trang web có thể bị chặn hoặc không tồn tại.`,
-        });
-      }
-
-      const html = await response.text();
-      const dom = new JSDOM(html, { url: parsedUrl.toString() });
-      const reader = new Readability(dom.window.document);
-      const article = reader.parse();
-
-      if (!article || !article.textContent || !article.textContent.trim()) {
-        return res.status(422).json({
-          ok: false,
-          error:
-            'Không thể trích xuất nội dung bài đọc từ trang web này. Trang có thể yêu cầu đăng nhập hoặc chỉ chứa hình ảnh.',
-        });
-      }
-
-      // FR-015: Sanitize extracted article content against stored XSS
-      const sanitizedArticleContent = sanitizeContent(article.content || article.textContent);
-
-      return res.json({
-        ok: true,
-        title: article.title || dom.window.document.title || 'Bài viết từ web',
-        content: article.textContent.trim(),
-        sanitizedHtml: sanitizedArticleContent,
-        byline: article.byline || undefined,
-        siteName: article.siteName || parsedUrl.hostname,
-      });
+      fetchResult = await safeFetchHtml(url);
     } catch (err) {
-      if (err && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
-        return res.status(504).json({
+      if (err instanceof SafeFetchError) {
+        return res.status(err.status).json({
           ok: false,
-          error: 'Quá thời gian chờ tải trang (10 giây). Vui lòng thử lại sau hoặc kiểm tra đường truyền mạng.',
+          error: err.message,
         });
       }
-      next(err);
+      return next(err);
     }
+
+    const { html, finalUrl } = fetchResult;
+    let parsedFinalUrl;
+    try {
+      parsedFinalUrl = new URL(finalUrl);
+    } catch {
+      parsedFinalUrl = new URL(url);
+    }
+
+    const dom = new JSDOM(html, { url: finalUrl });
+    const reader = new Readability(dom.window.document);
+    const article = reader.parse();
+
+    let content = '';
+    let title = (article?.title || dom.window.document.title || 'Bài viết từ web').trim();
+    let sanitizedArticleContent = '';
+    let byline = article?.byline || undefined;
+    const siteName = article?.siteName || parsedFinalUrl.hostname;
+
+    if (article && (article.content || article.textContent)) {
+      const formattedText = htmlToParagraphText(article.content || article.textContent, dom);
+      if (formattedText.length >= 100) {
+        content = formattedText;
+        sanitizedArticleContent = sanitizeContent(article.content || article.textContent);
+      }
+    }
+
+    // AI Fallback via Gemini 2.5 Flash if Readability yields empty or < 100 characters
+    if (!content || content.length < 100) {
+      const rawKey = process.env.GEMINI_API_KEY;
+      if (rawKey && rawKey.trim() !== '' && rawKey !== 'MY_GEMINI_API_KEY') {
+        try {
+          const ai = new GoogleGenAI({ apiKey: rawKey.trim() });
+          const aiResponse = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: [
+              `Hãy trích xuất nguyên văn nội dung chính của bài viết hoặc chương truyện từ mã nguồn HTML sau đây.
+Yêu cầu bắt buộc:
+1. Giữ các đoạn văn cách nhau bằng hai dấu xuống dòng (\\n\\n).
+2. Giữ nguyên tiêu đề (nếu có) ở dòng đầu tiên.
+3. Loại bỏ toàn bộ menu điều hướng, quảng cáo, danh sách liên kết, chân trang và bình luận.
+4. Không thêm bất kỳ lời chào, lời giải thích, hay đánh dấu markdown như \`\`\` nào. Chỉ trả về nội dung bài viết.
+
+Mã nguồn HTML:
+${html.slice(0, 200000)}`,
+            ],
+          });
+
+          const aiText = (aiResponse.text || '').trim();
+          if (aiText.length >= 100) {
+            content = aiText;
+            byline = 'AI Extracted';
+            if (!title || title === 'Bài viết từ web') {
+              title = dom.window.document.title || 'Bài viết từ web';
+            }
+            sanitizedArticleContent = sanitizeContent(
+              aiText
+                .split(/\n\n+/)
+                .map(p => `<p>${p.trim()}</p>`)
+                .join('')
+            );
+          }
+        } catch (aiErr) {
+          console.warn('[FetchUrl] AI fallback extraction failed:', aiErr?.message || aiErr);
+        }
+      }
+    }
+
+    if (!content || content.length < 100) {
+      return res.status(422).json({
+        ok: false,
+        error:
+          'Không thể trích xuất nội dung bài đọc từ trang web này. Trang có thể yêu cầu đăng nhập hoặc chỉ chứa hình ảnh.',
+      });
+    }
+
+    // Task 6 / US6: Scan for "Next Chapter" navigation link
+    let nextChapterUrl = undefined;
+    try {
+      const anchorElements = Array.from(dom.window.document.querySelectorAll('a[href]'));
+      const nextLinkRegex = /(?:chương\s*(?:sau|tiếp)|tiếp\s*theo|next\s*chapter|chap\s*sau)/i;
+      const nextLink = anchorElements.find(a => {
+        const text = a.textContent || '';
+        const titleAttr = a.getAttribute('title') || '';
+        const ariaLabel = a.getAttribute('aria-label') || '';
+        return nextLinkRegex.test(text) || nextLinkRegex.test(titleAttr) || nextLinkRegex.test(ariaLabel);
+      });
+
+      if (nextLink) {
+        const href = nextLink.getAttribute('href');
+        if (href && href.trim()) {
+          const resolved = new URL(href.trim(), finalUrl);
+          if (resolved.protocol === 'http:' || resolved.protocol === 'https:') {
+            nextChapterUrl = resolved.toString();
+          }
+        }
+      }
+    } catch {
+      // Ignore next chapter discovery errors
+    }
+
+    return res.json({
+      ok: true,
+      title,
+      content,
+      sanitizedHtml: sanitizedArticleContent,
+      byline,
+      siteName,
+      ...(nextChapterUrl ? { nextChapterUrl } : {}),
+    });
   }
 );
 
