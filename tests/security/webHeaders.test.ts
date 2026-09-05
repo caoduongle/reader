@@ -1,8 +1,7 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import app from '../../server.js';
-import { enforceHttps } from '../../server/middleware/enforceHttps.js';
 
-describe('HTTP Security Headers & HTTPS Enforcement (FR-016, FR-017)', () => {
+describe('HTTP Security Headers (FR-016, FR-017, FR-018)', () => {
   it('emits all required security headers (HSTS, CSP, nosniff, Referrer, Permissions, X-Frame-Options)', async () => {
     return new Promise<void>((resolve, reject) => {
       const server = app.listen(0, async () => {
@@ -48,52 +47,5 @@ describe('HTTP Security Headers & HTTPS Enforcement (FR-016, FR-017)', () => {
       });
     });
   });
-
-  describe('enforceHttps middleware (FR-016)', () => {
-    it('redirects HTTP to HTTPS with 301 in production', () => {
-      const originalEnv = process.env.NODE_ENV;
-      process.env.NODE_ENV = 'production';
-
-      const req = {
-        secure: false,
-        get: vi.fn((header) => (header === 'x-forwarded-proto' ? 'http' : 'example.com')),
-        url: '/api/test',
-      };
-      const res = {
-        redirect: vi.fn(),
-      };
-      const next = vi.fn();
-
-      // @ts-expect-error test mock
-      enforceHttps(req, res, next);
-
-      expect(res.redirect).toHaveBeenCalledWith(301, 'https://example.com/api/test');
-      expect(next).not.toHaveBeenCalled();
-
-      process.env.NODE_ENV = originalEnv;
-    });
-
-    it('passes through when already HTTPS in production', () => {
-      const originalEnv = process.env.NODE_ENV;
-      process.env.NODE_ENV = 'production';
-
-      const req = {
-        secure: true,
-        get: vi.fn(() => 'https'),
-        url: '/api/test',
-      };
-      const res = {
-        redirect: vi.fn(),
-      };
-      const next = vi.fn();
-
-      // @ts-expect-error test mock
-      enforceHttps(req, res, next);
-
-      expect(next).toHaveBeenCalled();
-      expect(res.redirect).not.toHaveBeenCalled();
-
-      process.env.NODE_ENV = originalEnv;
-    });
-  });
 });
+

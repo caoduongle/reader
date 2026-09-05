@@ -21,20 +21,6 @@ export const aiRateLimiter = rateLimit({
   },
 });
 
-/**
- * Rate Limiter for Authentication Endpoints (/api/auth/login, /api/auth/register)
- * Allows up to 5 attempts per 15 minutes per IP to prevent brute-force credential stuffing.
- */
-export const authRateLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: {
-    ok: false,
-    error: 'Quá nhiều lần thử đăng nhập không thành công. Vui lòng thử lại sau 15 phút.',
-  },
-});
 
 /**
  * Global API Rate Limiter

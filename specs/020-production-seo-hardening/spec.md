@@ -144,3 +144,12 @@ As a web user with varying network speeds, I want the web bundle to be optimized
 - The production custom domain will be `https://voxread.app` (configurable via `VITE_SITE_URL`).
 - The application remains an SPA with client-side state and optional hash/path routing, compatible with static host fallbacks.
 - Desktop packaging via Electron Builder remains fully supported with relative chunk loading.
+
+---
+
+## Historical Amendment Note (Feature 024)
+
+> [!NOTE]
+> **Architecture Amendment (Feature 024 Decommissioning)**:
+> In feature `024-cleanup-saas-cors`, multi-tenant SaaS features (remote auth, user accounts, cloud document persistence, Supabase, JWT) were decommissioned in favor of a 100% local single-user architecture. Production SEO metadata (`SITE_CONFIG`), Vite production settings (`sourcemap: false`), and performance optimizations established in this specification remain active and authoritative for VoxRead web deployments.
+

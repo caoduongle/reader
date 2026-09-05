@@ -125,3 +125,12 @@ As a security auditor and platform engineer, I want sensitive database credentia
 - The authentication layer provides valid JWTs via `Authorization: Bearer <token>` or secure HttpOnly cookies.
 - Standalone local deployments without an external PostgreSQL database use in-memory stores that mirror the exact same ownership verification logic.
 - Production PostgreSQL database has `pgcrypto` extension enabled and executes migrations with proper schema permissions.
+
+---
+
+## Historical Amendment Note (Feature 024)
+
+> [!NOTE]
+> **Architecture Amendment (Feature 024 Decommissioning)**:
+> In feature `024-cleanup-saas-cors`, the multi-tenant cloud database (Supabase, PostgreSQL RLS, remote document persistence, JWT session authentication, and database query wrappers) was decommissioned from the codebase in favor of a 100% local single-user architecture. Active defenses for the local gateway (Zod input validation, SSRF guard, magic bytes upload guard, Helmet CSP, and error sanitization) remain active and are maintained in `server.js` and `docs/security.md`.
+

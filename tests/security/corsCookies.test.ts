@@ -1,9 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import app from '../../server.js';
-import { getSecureCookieOptions } from '../../server/lib/cookies.js';
-import { authRateLimiter, aiRateLimiter, globalRateLimiter } from '../../server/middleware/rateLimiter.js';
+import { aiRateLimiter, globalRateLimiter } from '../../server/middleware/rateLimiter.js';
 
-describe('CORS Whitelist, CSRF Cookie Flags & Rate Limiters (FR-011, FR-014, FR-015, FR-018)', () => {
+describe('CORS Whitelist & Rate Limiters (FR-011, FR-015)', () => {
   describe('CORS Whitelist (FR-015)', () => {
     it('allows requests from whitelisted origin and emits Access-Control headers with credentials', async () => {
       return new Promise<void>((resolve, reject) => {
@@ -60,31 +59,11 @@ describe('CORS Whitelist, CSRF Cookie Flags & Rate Limiters (FR-011, FR-014, FR-
     });
   });
 
-  describe('Secure Cookie Flags (FR-014, FR-018)', () => {
-    it('enforces HttpOnly, SameSite=lax, and path=/ by default', () => {
-      const options = getSecureCookieOptions();
-      expect(options.httpOnly).toBe(true);
-      expect(options.sameSite).toBe('lax');
-      expect(options.path).toBe('/');
-    });
-
-    it('enforces Secure=true in production environment', () => {
-      const originalEnv = process.env.NODE_ENV;
-      try {
-        process.env.NODE_ENV = 'production';
-        const options = getSecureCookieOptions();
-        expect(options.secure).toBe(true);
-      } finally {
-        process.env.NODE_ENV = originalEnv;
-      }
-    });
-  });
-
   describe('Rate Limiter Configurations (FR-011)', () => {
-    it('defines authRateLimiter, aiRateLimiter, and globalRateLimiter as valid Express middleware', () => {
-      expect(typeof authRateLimiter).toBe('function');
+    it('defines aiRateLimiter and globalRateLimiter as valid Express middleware', () => {
       expect(typeof aiRateLimiter).toBe('function');
       expect(typeof globalRateLimiter).toBe('function');
     });
   });
 });
+

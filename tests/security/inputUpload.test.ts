@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { generateSchema, fetchUrlSchema, updateDocumentSchema } from '../../server/validators/apiSchemas.js';
+import { generateSchema, fetchUrlSchema } from '../../server/validators/apiSchemas.js';
 import { sanitizeContent, escapeHtml } from '../../server/lib/sanitizer.js';
 import { validateBufferMagicBytes } from '../../server/middleware/uploadGuard.js';
 
@@ -11,14 +11,6 @@ describe('AppSec FR-014: Input Validation (Zod Schemas)', () => {
 
   it('rejects invalid URL in fetchUrlSchema', () => {
     const res = fetchUrlSchema.safeParse({ url: 'javascript:alert(1)' });
-    expect(res.success).toBe(false);
-  });
-
-  it('rejects field tampering (mass assignment) in updateDocumentSchema', () => {
-    const res = updateDocumentSchema.safeParse({
-      title: 'Valid title',
-      role: 'admin', // Restricted field!
-    });
     expect(res.success).toBe(false);
   });
 });

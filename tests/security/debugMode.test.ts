@@ -13,8 +13,8 @@ describe('Debug Mode Suppression & Production Settings (FR-019, FR-020)', () => 
       error.stack = 'Error: Database connection failed\n    at internal/db.js:42:15';
 
       const req = {
-        method: 'GET',
-        originalUrl: '/api/documents',
+        method: 'POST',
+        originalUrl: '/api/generate',
         ip: '127.0.0.1',
       };
       const res = {

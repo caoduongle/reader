@@ -1,14 +1,12 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import helmet from 'helmet';
-import cookieParser from 'cookie-parser';
 import { GoogleGenAI } from '@google/genai';
 import { Readability } from '@mozilla/readability';
 import { JSDOM } from 'jsdom';
 
 // Security modules & middleware
 import { assertPublicHost } from './lib/ssrfGuard.js';
-import { requireAuth } from './server/middleware/auth.js';
 import {
   aiRateLimiter,
   globalRateLimiter,
@@ -21,27 +19,10 @@ import {
 } from './server/validators/apiSchemas.js';
 import { sanitizeContent } from './server/lib/sanitizer.js';
 import { validateBase64Image } from './server/middleware/uploadGuard.js';
-import { enforceHttps } from './server/middleware/enforceHttps.js';
 import { errorHandler } from './server/middleware/errorHandler.js';
-
-// Route modules
-import authRouter from './server/routes/auth.js';
-import documentRouter from './server/routes/documents.js';
-import adminRouter from './server/routes/admin.js';
 
 // Load environment variables
 dotenv.config();
-
-// FR-002: Validate required environment variables on startup
-export function validateStartupEnv() {
-  const env = process.env.NODE_ENV || 'development';
-  if (env === 'production') {
-    if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
-      throw new Error('[Security Critical] JWT_SECRET must be at least 32 characters in production.');
-    }
-  }
-}
-validateStartupEnv();
 
 const app = express();
 const PORT = process.env.PROXY_PORT || 3001;
@@ -84,12 +65,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// FR-019: Production HTTPS redirection
-app.use(enforceHttps);
-
-// FR-009: Secure cookie parsing
-app.use(cookieParser());
-
 // Limit JSON payload strictly to 15MB
 app.use(express.json({ limit: '15mb' }));
 
@@ -122,11 +97,6 @@ app.use((req, res, next) => {
 // FR-011: Global rate limiter on all API endpoints
 app.use('/api', globalRateLimiter);
 
-// Mount modular sub-routers
-app.use('/api/auth', authRouter);
-app.use('/api/documents', documentRouter);
-app.use('/api/admin', adminRouter);
-
 // Health check endpoint (Public)
 app.get('/health', (req, res) => {
   const rawKey = process.env.GEMINI_API_KEY;
@@ -144,7 +114,6 @@ app.get('/health', (req, res) => {
 app.post(
   '/api/generate',
   aiRateLimiter,
-  requireAuth,
   validateBody(generateSchema),
   async (req, res, next) => {
     const rawKey = process.env.GEMINI_API_KEY;
@@ -180,7 +149,6 @@ app.post(
 // Web article extraction endpoint using Mozilla Readability (FR-006, FR-014, FR-015)
 app.post(
   '/api/fetch-url',
-  requireAuth,
   validateBody(fetchUrlSchema),
   async (req, res, next) => {
     const { url } = req.body;
@@ -267,7 +235,6 @@ app.post(
 app.post(
   '/api/ocr',
   aiRateLimiter,
-  requireAuth,
   validateBody(ocrSchema),
   async (req, res, next) => {
     const { image } = req.body;

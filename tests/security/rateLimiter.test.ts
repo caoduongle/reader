@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { aiRateLimiter, authRateLimiter, globalRateLimiter } from '../../server/middleware/rateLimiter.js';
+import { aiRateLimiter, globalRateLimiter } from '../../server/middleware/rateLimiter.js';
 
 describe('AppSec FR-011: Rate Limiting Middleware', () => {
   it('aiRateLimiter has 30 requests per minute threshold', () => {
@@ -7,13 +7,9 @@ describe('AppSec FR-011: Rate Limiting Middleware', () => {
     expect(typeof aiRateLimiter).toBe('function');
   });
 
-  it('authRateLimiter has 5 requests per 15 minutes threshold', () => {
-    expect(authRateLimiter).toBeDefined();
-    expect(typeof authRateLimiter).toBe('function');
-  });
-
   it('globalRateLimiter has 120 requests per minute threshold', () => {
     expect(globalRateLimiter).toBeDefined();
     expect(typeof globalRateLimiter).toBe('function');
   });
 });
+

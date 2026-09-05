@@ -68,16 +68,3 @@ export const ocrSchema = z
   })
   .strict();
 
-/**
- * Validation schema for updating user documents (FR-008 Mass Assignment Defense)
- * Explicitly forbids tampering with role, is_admin, user_id, or created_at.
- */
-export const updateDocumentSchema = z
-  .object({
-    title: z.string().trim().min(1).max(255).optional(),
-    content: z.string().max(10_000_000).optional(),
-    readingProgress: z.number().min(0).max(100).optional(),
-    currentPosition: z.number().int().nonnegative().optional(),
-    isPrivate: z.boolean().optional(),
-  })
-  .strict();

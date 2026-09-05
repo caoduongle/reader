@@ -1,30 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { query } from '../../server/db/index.js';
 import { validateBase64Image } from '../../server/middleware/uploadGuard.js';
 
-describe('SQL Injection Defense & Magic Bytes Upload Guard (FR-009, FR-010, FR-013)', () => {
-  describe('SQL Parameterization Wrapper (FR-009)', () => {
-    it('rejects unparameterized queries when params is not an array', async () => {
-      // @ts-expect-error testing invalid argument type
-      await expect(query('SELECT * FROM users', 'not-an-array')).rejects.toThrow(
-        /Query params must be passed as an Array to prevent SQL injection/
-      );
-    });
-
-    it('rejects empty or invalid query text', async () => {
-      // @ts-expect-error testing invalid argument type
-      await expect(query('', [])).rejects.toThrow(/Query text must be a valid SQL string/);
-    });
-
-    it('safely handles SQL injection payloads in parameters without syntax errors', async () => {
-      const sqlInjectionPayload = "admin' OR '1'='1; DROP TABLE users; --";
-      // In test mode without DATABASE_URL, query wrapper returns safe empty result
-      const result = await query('SELECT * FROM user_profiles WHERE email = $1', [sqlInjectionPayload]);
-      expect(result).toBeDefined();
-      expect(result.rows).toEqual([]);
-    });
-  });
-
+describe('Magic Bytes Upload Guard (FR-013, FR-016)', () => {
   describe('File Upload Magic Bytes Verification (FR-013)', () => {
     it('rejects disguised executable or script disguised as image', async () => {
       // PHP script encoded in base64
@@ -66,3 +43,4 @@ describe('SQL Injection Defense & Magic Bytes Upload Guard (FR-009, FR-010, FR-0
     });
   });
 });
+

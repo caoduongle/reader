@@ -1,93 +1,96 @@
 # VoxRead Application Security Architecture & Hardening Guide
 
-This document specifies the security controls and operational practices implemented in the VoxRead backend, database layer, and data communication flow.
+This document specifies the security controls and operational practices implemented in the VoxRead local application, backend proxy (`server.js`), and Python speech synthesis server (`python-backend/server.py`).
 
 ---
 
 ## 1. Security Architecture Overview
 
+VoxRead operates as a local, privacy-focused desktop and web application. All data resides locally on the user's device, with lightweight local proxies for AI processing and speech synthesis.
+
 The system implements defense-in-depth across multiple protective tiers:
 
 ```mermaid
 flowchart TD
-    Client[Web SPA / Electron Client] -->|HTTPS Only| Gateway[Express Gateway: server.js]
-    Gateway --> Helmet[Security Headers / Helmet]
-    Helmet --> RateLimiter[Rate Limiter: 30 req/min AI, 5 req/15m Auth]
-    RateLimiter --> Auth[JWT Server-Side Verification: requireAuth]
-    Auth --> Validation[Zod Schema Validation & Strict Picking]
-    Validation --> Sanitizer[Content Sanitizer: sanitize-html]
-    Validation --> UploadGuard[File Magic Bytes & 15MB Ceiling]
-    Sanitizer --> DB[(PostgreSQL / Supabase)]
-    DB --> RLS[PostgreSQL Row-Level Security: auth.uid = user_id]
-    DB --> Crypto[AES-256-GCM / pgcrypto Encryption at Rest]
+    Client[Web SPA / Electron Client] -->|Loopback 127.0.0.1| Gateway[Express Gateway: server.js]
+    Gateway --> Loopback[Loopback Binding: 127.0.0.1:3001]
+    Gateway --> Helmet[Security Headers / Helmet CSP]
+    Gateway --> CORS[Origin Whitelist: localhost:3000, 127.0.0.1:3000, null]
+    Gateway --> RateLimiter[Rate Limiters: 30 req/min AI, 120 req/min Global]
+    RateLimiter --> Validation[Zod Schema Validation & Strict Picking]
+    Validation --> SSRF[SSRF Guard: assertPublicHost for Web Extraction]
+    Validation --> UploadGuard[File Magic Bytes & 15MB Ceiling for OCR]
+    Validation --> Sanitizer[Content Sanitizer: sanitize-html / DOMPurify]
+    Gateway --> ErrHandler[Error Handler: Stack Trace Suppression]
 ```
 
 ---
 
-## 2. The 20 Implemented AppSec Standards
+## 2. Core Security Defenses
 
-1. **Hide API Keys**: `GEMINI_API_KEY`, `JWT_SECRET`, and `DATA_ENCRYPTION_KEY` reside exclusively in server environments (`process.env`). `x-powered-by` header disabled.
-2. **Purge Git Secrets**: `.gitignore` guards `.env*`, `*.pem`, `*.key`. Automated purge script provided in `scripts/purge-git-secrets.bat`.
-3. **Use Public DB Key**: Client uses `VITE_SUPABASE_ANON_KEY` respecting RLS; server uses `SUPABASE_SERVICE_ROLE_KEY` via `server/lib/supabaseAdmin.js`.
-4. **Enable Row-Level Security (RLS)**: 100% of tables in `supabase/migrations/20260904_security_hardening.sql` enforce `auth.uid() = user_id`.
-5. **Encrypt Sensitive Data**: AES-256-GCM symmetric authenticated encryption implemented in `server/lib/crypto.js` and `pgcrypto` in database.
-6. **Server-Side Authentication**: `server/middleware/auth.js` enforces verified JWT tokens via Authorization header or secure cookie.
-7. **Lock Record Access (IDOR)**: `server/routes/documents.js` enforces `WHERE id = $1 AND user_id = $2`.
-8. **Block Field Tampering**: Strict Zod schemas reject unexpected fields (`role`, `is_admin`). Database triggers raise exceptions if unauthorized updates occur.
-9. **Secure Session Cookies**: `server/lib/cookies.js` configures `HttpOnly`, `Secure` (in prod), `SameSite=Lax`.
-10. **Hash Passwords**: `server/services/passwordService.js` hashes using Argon2id with 64MB RAM memory-hardness.
-11. **Rate Limit Login & APIs**: `server/middleware/rateLimiter.js` applies 30 req/min for AI endpoints and 5 attempts/15min for auth.
-12. **Add Bot Protection**: `server/middleware/botProtection.js` checks hidden honeypot fields and verifies Cloudflare Turnstile tokens.
-13. **Parameterize Queries**: `server/db/index.js` wraps PostgreSQL connection pool enforcing prepared statements ($1, $2).
-14. **Validate All Input**: `server/middleware/validate.js` and `server/validators/apiSchemas.js` validate 100% of request payloads.
-15. **Escape User Content**: `server/lib/sanitizer.js` uses `sanitize-html` to strip `<script>`, event handlers, and malicious tags.
-16. **Restrict File Uploads**: `server/middleware/uploadGuard.js` validates binary magic bytes, enforces 15MB limit, and assigns UUID names.
-17. **Trim API Responses**: `server/middleware/errorHandler.js` strips error stack traces and internal paths in production.
-18. **Add Security Headers**: Helmet injects `HSTS`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Content-Security-Policy`.
-19. **Force HTTPS**: `server/middleware/enforceHttps.js` redirects HTTP traffic to HTTPS in production.
-20. **Scan Dependencies**: `package.json` overrides patch `qs` vulnerabilities; GitHub Actions runs automated weekly audits.
+### 1. Loopback Binding & Network Isolation
+- **Strict Host Binding**: The Express proxy (`server.js`) binds strictly to `127.0.0.1:3001`. The Python speech server binds strictly to `127.0.0.1:8008`.
+- **No External Exposure**: Neither server listens on `0.0.0.0`, preventing remote devices on the same local network (LAN) from accessing the application services.
 
----
+### 2. Strict CORS Origin Whitelisting
+- **Allowed Origins**: Requests are strictly validated against an approved origin set:
+  - `http://localhost:3000` (Local development)
+  - `http://127.0.0.1:3000` (Local production web preview)
+  - `null` (Chromium / Electron packaged builds loading from `file://`)
+- **Python Backend CORS**: Preflight `OPTIONS /speak` requests echo CORS headers only for whitelisted origins and reject arbitrary origins without wildcard `*` leakage.
 
-## 3. Secret Rotation Procedures
+### 3. HTTP Security Headers & Helmet CSP
+- `server.js` configures `helmet` with:
+  - **Content-Security-Policy (CSP)**: `default-src 'self'`, restricting resource loading.
+  - **Frame Protection**: `frameAncestors: ["'none'"]` and `frameguard: { action: 'deny' }` to prevent clickjacking.
+  - **MIME Sniffing**: `noSniff: true` (`X-Content-Type-Options: nosniff`).
+  - **HSTS**: `max-age=31536000; includeSubDomains; preload`.
+  - **Permissions-Policy**: Disables unnecessary hardware APIs (`camera=()`, `microphone=()`, `geolocation=()`).
+  - **Fingerprint Suppression**: `x-powered-by` header disabled.
 
-### Rotating JWT Secret
-1. Generate new 32+ byte string: `node -e "console.log(crypto.randomBytes(32).toString('base64'))"`
-2. Update `JWT_SECRET` in environment variables.
-3. Existing client sessions will expire and require re-authentication.
+### 4. Server-Side Request Forgery (SSRF) Guard
+- In `/api/fetch-url`, user-provided URLs are parsed and inspected by `lib/ssrfGuard.js` (`assertPublicHost`).
+- Resolves DNS addresses and blocks private, loopback, link-local, and cloud metadata IP ranges (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `127.0.0.0/8`, `169.254.0.0/16`).
 
-### Rotating Data Encryption Key
-1. Generate new 32-byte hex key: `node -e "console.log(crypto.randomBytes(32).toString('hex'))"`
-2. Set `DATA_ENCRYPTION_KEY_NEW`.
-3. Run database migration script to re-encrypt stored records using new key before decommissioning old key.
+### 5. Multi-Tier Rate Limiting
+- `server/middleware/rateLimiter.js` enforces request caps:
+  - **AI Endpoints (`aiRateLimiter`)**: 30 requests/minute per IP for `/api/generate` and `/api/ocr` to prevent accidental loops or API quota exhaustion.
+  - **Global Endpoints (`globalRateLimiter`)**: 120 requests/minute across general endpoints.
 
----
+### 6. Input Validation & Strict Typing
+- All incoming payloads are validated via Zod schemas before hitting business logic (`server/validators/apiSchemas.js`):
+  - `generateSchema`: Validates prompt length (1–50,000 chars), optional model, and system instructions.
+  - `fetchUrlSchema`: Validates HTTP/HTTPS protocol and 2048-char maximum URL length.
+  - `ocrSchema`: Validates image data presence and format.
 
-## 4. Cloud & AI API Spend Caps and Budget Alerts (FR-012)
+### 7. File Upload & Magic Bytes Verification
+- In `/api/ocr`, image data is verified via `server/middleware/uploadGuard.js`:
+  - **Magic Bytes Inspection**: Inspects true binary header signatures (using `file-type`) to ensure the file is an authorized image/document type (JPEG, PNG, WEBP, PDF), preventing malicious executable disguise.
+  - **Payload Size Limits**: Strict 15MB cap on base64 image data.
 
-To protect the platform against runaway billing and quota exhaustion:
+### 8. HTML Sanitization & XSS Defense
+- **Server Sanitization**: Extracted web content in `/api/fetch-url` is sanitized using `sanitize-html` (`server/lib/sanitizer.js`), removing dangerous tags (`<script>`, `<iframe>`, `<object>`) and active event handlers (`onload`, `onerror`).
+- **Client Sanitization**: Client-side rendering utilizes `DOMPurify` before injecting formatted chapter HTML into the reader view.
 
-### Google Cloud / Google AI Studio (Gemini API)
-1. **Budget Creation**: Open [Google Cloud Console Billing](https://console.cloud.google.com/billing) -> **Budgets & alerts**.
-2. **Hard Spending Limit**: Create a monthly budget (e.g. `$25.00/month`).
-3. **Threshold Alerts**:
-   - 50% threshold: Notification email sent to platform administrator.
-   - 80% threshold: Warning notification to review usage spikes.
-   - 100% threshold: Trigger Cloud Functions / Webhook to disable external API calls or throttle non-essential traffic.
-4. **Google AI Studio Quota Limits**: Under **API Key settings**, restrict key usage to specific IP addresses and set per-minute request rate caps.
-
-### Supabase Database & Storage Quotas
-1. Access **Project Settings** -> **Usage & Billing**.
-2. Set a **Spend Cap** enabled on the organization to prevent automatic upgrades to paid tiers upon exceeding free/pro quota boundaries.
+### 9. Production Error Trimming & Information Leakage Prevention
+- Global error handler (`server/middleware/errorHandler.js`) catches all unhandled exceptions:
+  - In production (`NODE_ENV=production`), returns sanitized generic error messages and suppresses stack traces, file paths, and internal server details.
+  - Security audit logs record structured error events locally for debugging.
 
 ---
 
-## 5. Production Build & Deployment Hardening (FR-020)
+## 3. Secret Management
+
+- **API Keys**: External API keys (`GEMINI_API_KEY`) reside exclusively in local `.env` files or application settings and are never bundled into client distributions.
+- **Git Hygiene**: `.gitignore` strictly guards `.env`, `.env.*`, and temporary build outputs.
+
+---
+
+## 4. Production Build & Bundling Hardening
 
 1. **Vite Production Bundler**:
-   - `build.sourcemap: false`: Disallows leaking readable TypeScript sources to the public web.
-   - `esbuild.drop: ['console', 'debugger']`: Automatically strips all debug and console outputs from production bundles.
-2. **Process Privilege Isolation**:
-   - Run Node.js and Python processes as unprivileged non-root users (`uid=1000`) in Docker/systemd environments.
-3. **Reverse Proxy SSL/TLS Termination**:
-   - Nginx/Caddy fronting the application must enforce TLS 1.3 only with strong AEAD cipher suites.
+   - `build.sourcemap: false`: Disallows leaking readable TypeScript sources in production assets.
+   - `esbuild.drop: ['console', 'debugger']`: Automatically strips debug and console outputs from production bundles.
+2. **Electron Security Isolation**:
+   - Context isolation enabled in Electron main and preload processes.
+   - Node integration disabled in renderer frames.

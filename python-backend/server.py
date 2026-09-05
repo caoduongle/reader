@@ -90,11 +90,7 @@ async def _synthesize_base(text: str, out_path: str):
 @app.route("/speak", methods=["POST", "OPTIONS"])
 def speak():
     if request.method == "OPTIONS":
-        resp = Response(status=204)
-        resp.headers["Access-Control-Allow-Origin"] = "*"
-        resp.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
-        resp.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-        return resp
+        return Response(status=204)
 
     data = request.get_json(force=True, silent=True) or {}
     text = (data.get("text") or "").strip()
@@ -135,13 +131,12 @@ def speak():
 
 @app.after_request
 def _add_cors_headers(resp):
-    if "Access-Control-Allow-Origin" not in resp.headers:
-        origin = request.headers.get("Origin")
-        allowed_origins = {"http://localhost:3000", "http://127.0.0.1:3000", "null"}
-        if origin and (origin in allowed_origins or origin.startswith("chrome-extension://")):
-            resp.headers["Access-Control-Allow-Origin"] = origin
-            resp.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
-            resp.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+    origin = request.headers.get("Origin")
+    allowed_origins = {"http://localhost:3000", "http://127.0.0.1:3000", "null"}
+    if origin and (origin in allowed_origins or origin.startswith("chrome-extension://")):
+        resp.headers["Access-Control-Allow-Origin"] = origin
+        resp.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
+        resp.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     resp.headers["X-Content-Type-Options"] = "nosniff"
     resp.headers["X-Frame-Options"] = "DENY"
     return resp

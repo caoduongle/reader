@@ -173,29 +173,23 @@ Dành cho người muốn đọc sách bằng chính giọng AI của bản thâ
 
 ---
 
-## 🔍 Ghi chú kiến trúc: Phân tích & Lịch sử các Server
+## 🔍 Ghi chú kiến trúc backend
 
-Trong quá trình phát triển dự án, mã nguồn có sự chuyển dịch kiến trúc quan trọng giữa các phiên bản backend:
+Hệ thống sử dụng hai dịch vụ backend chạy cục bộ (loopback) phục vụ các mục đích chuyên biệt:
 
-### 1. `python-backend/server.py` vs `server.py` (root cũ)
+1. **`python-backend/server.py` (Cổng 8008)**:
+   - Viết bằng **Flask**, sử dụng pipeline kết hợp **Edge-TTS** và **RVC** (`rvc-python`) để tổng hợp giọng đọc tiếng Việt và chuyển đổi âm sắc theo mô hình cá nhân hóa.
+   - Tự động đóng gói venv và khởi động cùng ứng dụng desktop Electron.
 
-- **Bản chất**: Cùng một mã nguồn 100%. Cả hai đều viết bằng **Flask**, sử dụng pipeline `Edge-TTS` + `rvc-python`, lắng nghe tại cổng `8008`.
-- **Nguyên nhân**: Ban đầu `server.py` đặt ở thư mục gốc phục vụ cho Chrome extension. Khi dự án phát triển bản Desktop Electron, file được copy vào `python-backend/server.py` để tiện quản lý tiến trình và đóng gói vào installer (`electron/main.ts` dòng 56 và `package.json` dòng 29 trỏ trực tiếp tới `python-backend/server.py`). Bản ở gốc repo là bản trùng lặp thừa và đã được dọn dẹp.
-
-### 2. `local-voice-server/` vs `python-backend/server.py`
-
-- **Bản chất**: **Hai server hoàn toàn khác nhau về công nghệ và mô hình AI**, nhưng dùng chung một giao thức gọi `POST http://localhost:8008/speak`:
-  - `local-voice-server/server.py`: Viết bằng **FastAPI + Uvicorn**, dùng mô hình **viXTTS (XTTS-v2)** để clone giọng zero-shot trực tiếp từ một đoạn ghi âm `voice_sample.wav` 10–30s (không cần huấn luyện model riêng).
-  - `python-backend/server.py`: Viết bằng **Flask**, dùng **Edge-TTS + RVC** (`rvc-python`). Tạo giọng nền tiếng Việt chuẩn tốc độ cao qua Edge-TTS rồi dùng RVC biến đổi âm sắc theo checkpoint `.pth`.
-- **Lý do chuyển đổi**: viXTTS đòi hỏi cấu hình máy rất nặng (~2GB model, ngốn nhiều VRAM và tốc độ đọc chậm hơn trên CPU/GPU phổ thông). Pipeline Edge-TTS + RVC cho tốc độ suy luận nhanh hơn gấp nhiều lần, ngữ điệu tiếng Việt tự nhiên hơn và nhẹ hơn cho người dùng cuối.
+2. **`server.js` (Cổng 3001)**:
+   - Viết bằng **Express**, đóng vai trò gateway cục bộ trung gian cho các tính năng:
+     - `/api/generate`: Proxy an toàn gọi Gemini API (bảo vệ API key).
+     - `/api/ocr`: Nhận diện chữ từ ảnh chụp màn hình bằng mô hình Gemini Vision kèm xác thực magic bytes.
+     - `/api/fetch-url`: Trích xuất nội dung văn bản từ đường dẫn web kèm cơ chế chống SSRF và làm sạch XSS.
 
 ---
 
-## 📌 Hạng mục cần quyết định (Dành cho chủ Repository)
+## 📌 Hạng mục định hướng phát triển
 
-1. **Định hướng tiện ích Chrome Extension (`tts-extension`)**:
-   - Hiện tại VoxRead đã phát triển thành ứng dụng độc lập hoàn chỉnh trên Web và Desktop (Electron) với khả năng import tệp TXT/PDF/EPUB và quản lý tiến trình đọc sách.
-   - Tiện ích mở rộng Chrome extension cũ là một luồng đọc độc lập trực tiếp trên trang web. Cần quyết định duy trì nó thành một repo phụ riêng biệt hay tích hợp sâu vào hệ sinh thái VoxRead.
-2. **Lựa chọn công nghệ Voice Cloning**:
-   - Kiến trúc hiện tại ưu tiên **Edge-TTS + RVC** (`python-backend/server.py`) vì tốc độ và độ ổn định.
-   - Thư mục `local-voice-server` (viXTTS zero-shot) có thể được lưu trữ tại nhánh thử nghiệm (`experiments/vixtts`) nếu muốn tiếp tục nghiên cứu phương án clone giọng tức thì không cần train model.
+- **Tiện ích Chrome Extension (`tts-extension`)**: Hiện tại VoxRead đã phát triển thành ứng dụng độc lập hoàn chỉnh trên Web và Desktop (Electron) với khả năng import tệp TXT/PDF/EPUB và quản lý tiến trình đọc sách. Tiện ích mở rộng Chrome extension cũ có thể được tách thành repository riêng biệt hoặc tích hợp sâu vào hệ sinh thái VoxRead.
+

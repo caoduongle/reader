@@ -58,12 +58,26 @@ def test_speak_endpoint_rejects_whitespace_text(client):
     assert "error" in data
 
 
-def test_speak_options_preflight_returns_cors_headers(client):
-    """Verify OPTIONS /speak returns HTTP 204 with required CORS headers."""
+def test_speak_options_preflight_authorized_origin(client):
+    """Verify OPTIONS /speak with whitelisted Origin returns HTTP 204 and echoes Origin."""
+    response = client.options("/speak", headers={"Origin": "http://localhost:3000"})
+    assert response.status_code == 204
+    assert response.headers.get("Access-Control-Allow-Origin") == "http://localhost:3000"
+    assert "POST" in response.headers.get("Access-Control-Allow-Methods", "")
+
+
+def test_speak_options_preflight_unauthorized_origin(client):
+    """Verify OPTIONS /speak with untrusted Origin returns HTTP 204 without CORS headers."""
+    response = client.options("/speak", headers={"Origin": "https://trang-la.evil"})
+    assert response.status_code == 204
+    assert response.headers.get("Access-Control-Allow-Origin") is None
+
+
+def test_speak_options_preflight_no_origin(client):
+    """Verify OPTIONS /speak with no Origin header returns HTTP 204 without CORS headers."""
     response = client.options("/speak")
     assert response.status_code == 204
-    assert response.headers.get("Access-Control-Allow-Origin") == "*"
-    assert "POST" in response.headers.get("Access-Control-Allow-Methods", "")
+    assert response.headers.get("Access-Control-Allow-Origin") is None
 
 
 def test_speak_valid_request_returns_audio_wav(client):
