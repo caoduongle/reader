@@ -1,6 +1,0 @@
-{
-  "name": "VoxRead - TTS Novel & Document Reader",
-  "description": "Modern desktop-friendly Text-to-Speech (TTS) novel and document reader with interactive mascot, synchronized karaoke sentence highlighting, and multi-format support.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}
