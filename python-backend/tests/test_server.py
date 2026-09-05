@@ -327,3 +327,61 @@ def test_model_reload_endpoint(client):
     assert "model_loaded" in data
     assert "model_dir" in data
 
+
+def test_torch_load_monkeypatch_defaults_weights_only_false():
+    """Verify torch.load monkeypatch injects weights_only=False by default."""
+    import torch
+
+    assert torch.load == server._patched_torch_load
+
+    mock_orig = MagicMock(return_value="loaded_state")
+    with patch("server._original_torch_load", mock_orig):
+        res = torch.load("mock_model.pt", map_location="cpu")
+        assert res == "loaded_state"
+        mock_orig.assert_called_once_with("mock_model.pt", map_location="cpu", weights_only=False)
+
+
+def test_torch_load_monkeypatch_respects_explicit_weights_only():
+    """Verify torch.load monkeypatch respects explicit weights_only=True and weights_only=False."""
+    import torch
+
+    mock_orig = MagicMock(return_value="loaded_state")
+    with patch("server._original_torch_load", mock_orig):
+        # Case 1: Caller explicitly requests weights_only=True
+        res_true = torch.load("mock_model.pt", weights_only=True)
+        assert res_true == "loaded_state"
+        mock_orig.assert_called_with("mock_model.pt", weights_only=True)
+
+        # Case 2: Caller explicitly requests weights_only=False
+        res_false = torch.load("mock_model.pt", weights_only=False)
+        assert res_false == "loaded_state"
+        mock_orig.assert_called_with("mock_model.pt", weights_only=False)
+
+
+def test_speak_timing_log_emitted(client, capsys):
+    """Verify POST /speak prints timing telemetry with Edge-TTS, RVC inference, and text length."""
+    dummy_audio_array = np.zeros(16000, dtype=np.int16)
+
+    async def mock_synth(text, out_path):
+        with open(out_path, "wb") as f:
+            f.write(b"dummy_base_audio")
+
+    if not hasattr(server.rvc, "models") or not isinstance(server.rvc.models, dict):
+        server.rvc.models = {server.rvc.current_model: {"index": ""}}
+    if not hasattr(server.rvc.vc, "tgt_sr") or not isinstance(server.rvc.vc.tgt_sr, int):
+        server.rvc.vc.tgt_sr = 40000
+
+    sample_text = "Hôm nay trời rất đẹp."
+    with patch.object(server, "_synthesize_base", side_effect=mock_synth), \
+         patch.object(server.rvc.vc, "vc_single", return_value=dummy_audio_array):
+        response = client.post("/speak", json={"text": sample_text})
+        assert response.status_code == 200
+
+        captured = capsys.readouterr()
+        assert "[VoxRead][Timing]" in captured.out
+        assert "Edge-TTS:" in captured.out
+        assert "RVC inference:" in captured.out
+        assert f"Text length: {len(sample_text)} ky tu" in captured.out
+
+
+

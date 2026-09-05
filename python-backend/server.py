@@ -13,10 +13,25 @@ import asyncio
 import os
 import tempfile
 import threading
+import time
 import traceback
 
 import edge_tts
 import torch
+
+# --- Vá tuong thich PyTorch >= 2.6 cho fairseq (dependency cua rvc-python) ---
+# Tu PyTorch 2.6, torch.load() mac dinh weights_only=True, chan viec load cac checkpoint
+# cu (nhu hubert_base.pt) co chua object Python tuy bien (vd fairseq.data.dictionary.
+# Dictionary). fairseq da ngung cap nhat tu 2022 nen khong tu truyen weights_only=False.
+# hubert_base.pt / rmvpe.pt la file cong dong chuan, do chinh rvc_python tu tai ve tu
+# nguon chinh thuc, nen an toan de khoi phuc hanh vi torch.load cu cho rieng file nay.
+_original_torch_load = torch.load
+def _patched_torch_load(*args, **kwargs):
+    kwargs.setdefault("weights_only", False)
+    return _original_torch_load(*args, **kwargs)
+torch.load = _patched_torch_load
+# --- Het phan va ---
+
 from flask import Flask, request, Response, jsonify
 from rvc_python.infer import RVCInference
 from scipy.io import wavfile
@@ -205,10 +220,16 @@ def speak():
     out_path = os.path.join(tmp_dir, "out.wav")
 
     try:
+        t0 = time.time()
         asyncio.run(_synthesize_base(text, base_path))
+        t1 = time.time()
 
         with rvc_lock:
             _run_rvc_inference(base_path, out_path)
+        t2 = time.time()
+
+        print(f"[VoxRead][Timing] Edge-TTS: {t1-t0:.2f}s | RVC inference: {t2-t1:.2f}s | "
+              f"Text length: {len(text)} ky tu")
 
         with open(out_path, "rb") as f:
             wav_bytes = f.read()
