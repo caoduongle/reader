@@ -90,6 +90,7 @@ export function useTTS(
   const inFlightFetchesRef = useRef<Map<number, Promise<string | null>>>(new Map());
   // Dedicated audio element for previewing test voice
   const testAudioRef = useRef<HTMLAudioElement | null>(null);
+  const playTokenRef = useRef<number>(0);
 
   // Initialize single reusable Audio instances
   useEffect(() => {
@@ -378,6 +379,9 @@ export function useTTS(
   // Speak a specific sentence
   const speakSentence = useCallback(
     async (index: number) => {
+      playTokenRef.current += 1;
+      const myToken = playTokenRef.current;
+
       const sentenceList = sentencesRef.current;
       if (!sentenceList || index < 0 || index >= sentenceList.length) {
         // Chapter complete!
@@ -535,8 +539,13 @@ export function useTTS(
         return;
       }
 
-      // Stale check: verify user hasn't jumped to another sentence while fetching
-      if (!isPlayingRef.current || currentIdxRef.current !== index) {
+      // Stale check: verify user hasn't jumped to another sentence or paused while fetching
+      if (
+        playTokenRef.current !== myToken ||
+        !isPlayingRef.current ||
+        isPausedRef.current ||
+        currentIdxRef.current !== index
+      ) {
         return;
       }
 
@@ -606,6 +615,15 @@ export function useTTS(
         setIsPaused(false);
         setServerErrorMessage(`Lỗi phát âm thanh WAV (${reason}).`);
       };
+
+      if (
+        playTokenRef.current !== myToken ||
+        !isPlayingRef.current ||
+        isPausedRef.current ||
+        currentIdxRef.current !== index
+      ) {
+        return;
+      }
 
       try {
         await audio.play();
@@ -718,6 +736,7 @@ export function useTTS(
 
   // Stop completely
   const stop = useCallback(() => {
+    playTokenRef.current += 1;
     setIsPlaying(false);
     setIsPaused(false);
     setCurrentWordCharIndex(null);
