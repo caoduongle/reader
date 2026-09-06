@@ -32,6 +32,11 @@ interface CacheEntry {
   abortController?: AbortController;
 }
 
+interface InFlightPrefetchEntry {
+  promise: Promise<string | null>;
+  controller: AbortController;
+}
+
 export function useTTS(
   currentSentences: SentenceItem[],
   onSentenceChange?: (sentenceIndex: number) => void,
@@ -88,7 +93,7 @@ export function useTTS(
   // Audio prefetch cache mapping sentenceIndex -> CacheEntry
   const prefetchCacheRef = useRef<Map<number, CacheEntry>>(new Map());
   // In-flight fetch promises to prevent duplicate fetches
-  const inFlightFetchesRef = useRef<Map<number, Promise<string | null>>>(new Map());
+  const inFlightFetchesRef = useRef<Map<number, InFlightPrefetchEntry>>(new Map());
   // Dedicated audio element for previewing test voice
   const testAudioRef = useRef<HTMLAudioElement | null>(null);
   const playTokenRef = useRef<number>(0);
@@ -120,6 +125,17 @@ export function useTTS(
 
   // Clear prefetch cache & revoke object URLs
   const clearPrefetchCache = useCallback(() => {
+    inFlightFetchesRef.current.forEach(entry => {
+      if (entry.controller) {
+        try {
+          entry.controller.abort();
+        } catch {
+          // ignore
+        }
+      }
+    });
+    inFlightFetchesRef.current.clear();
+
     prefetchCacheRef.current.forEach(entry => {
       if (entry.abortController) {
         try {
@@ -133,7 +149,6 @@ export function useTTS(
       }
     });
     prefetchCacheRef.current.clear();
-    inFlightFetchesRef.current.clear();
   }, []);
 
   // Evict old cache entries that precede current sentence
@@ -364,15 +379,20 @@ export function useTTS(
         if (!text) continue;
 
         const controller = new AbortController();
-        const fetchPromise = fetchRVCSpeech(text, serverUrl, controller).then(blobUrl => {
-          inFlightFetchesRef.current.delete(targetIdx);
-          if (blobUrl) {
-            prefetchCacheRef.current.set(targetIdx, { blobUrl, abortController: controller });
-          }
-          return blobUrl;
-        });
+        const fetchPromise = fetchRVCSpeech(text, serverUrl, controller)
+          .then(blobUrl => {
+            inFlightFetchesRef.current.delete(targetIdx);
+            if (blobUrl) {
+              prefetchCacheRef.current.set(targetIdx, { blobUrl, abortController: controller });
+            }
+            return blobUrl;
+          })
+          .catch(() => {
+            inFlightFetchesRef.current.delete(targetIdx);
+            return null;
+          });
 
-        inFlightFetchesRef.current.set(targetIdx, fetchPromise);
+        inFlightFetchesRef.current.set(targetIdx, { promise: fetchPromise, controller });
       }
     },
     [fetchRVCSpeech]
@@ -498,8 +518,11 @@ export function useTTS(
 
       // Update state immediately to reflect active sentence
       setIsPlaying(true);
+      isPlayingRef.current = true;
       setIsPaused(false);
+      isPausedRef.current = false;
       setCurrentSentenceIndex(index);
+      currentIdxRef.current = index;
       if (onSentenceChange) {
         onSentenceChange(index);
       }
@@ -518,7 +541,7 @@ export function useTTS(
           // trong luc dang phat/doc do du lieu.
           prefetchCacheRef.current.delete(index);
         } else if (inFlightFetchesRef.current.has(index)) {
-          audioBlobUrl = await inFlightFetchesRef.current.get(index)!;
+          audioBlobUrl = await inFlightFetchesRef.current.get(index)!.promise;
           // Cung ly do nhu tren: fetchPromise da tu luu vao prefetchCacheRef truoc do (xem
           // logic prefetch phia tren), nen can xoa o day de dong bo.
           prefetchCacheRef.current.delete(index);
@@ -691,6 +714,7 @@ export function useTTS(
   // Pause
   const pause = useCallback(() => {
     setIsPaused(true);
+    isPausedRef.current = true;
     setIsBuffering(false);
     if (settingsRef.current.ttsProvider === 'rvc-local') {
       if (audioRef.current) {
@@ -718,7 +742,9 @@ export function useTTS(
           .play()
           .then(() => {
             setIsPaused(false);
+            isPausedRef.current = false;
             setIsPlaying(true);
+            isPlayingRef.current = true;
             prefetchUpcoming(currentIdxRef.current);
           })
           .catch(() => {
@@ -732,7 +758,9 @@ export function useTTS(
       if (window.speechSynthesis.paused) {
         window.speechSynthesis.resume();
         setIsPaused(false);
+        isPausedRef.current = false;
         setIsPlaying(true);
+        isPlayingRef.current = true;
         startKeepAlive();
       } else {
         play(currentSentenceIndex);
@@ -756,7 +784,9 @@ export function useTTS(
     playTokenRef.current += 1;
     loadedAudioIndexRef.current = null;
     setIsPlaying(false);
+    isPlayingRef.current = false;
     setIsPaused(false);
+    isPausedRef.current = false;
     setIsBuffering(false);
     setCurrentWordCharIndex(null);
 

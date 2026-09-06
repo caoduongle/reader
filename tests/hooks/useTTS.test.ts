@@ -507,4 +507,195 @@ describe('useTTS hook race condition guards & loaded audio index', () => {
       await Promise.resolve();
     });
   });
+
+  it('aborts in-flight background prefetch when stop() or jumpToSentence() is called', async () => {
+    let resolveSentence1: (value: Response) => void;
+    const sentence1Promise = new Promise<Response>(resolve => {
+      resolveSentence1 = resolve;
+    });
+
+    const abortSpy = vi.spyOn(AbortController.prototype, 'abort');
+
+    const mockFetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      if (url.includes('/speak')) {
+        const body = JSON.parse((init?.body as string) || '{}');
+        if (body.text === 'Câu thứ nhất.') {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            blob: async () => new Blob(['wav0'], { type: 'audio/wav' }),
+          });
+        }
+        if (body.text === 'Câu thứ hai.') {
+          return sentence1Promise;
+        }
+      }
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        blob: async () => new Blob(['wav'], { type: 'audio/wav' }),
+      });
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    const { result } = renderHook(() => useTTS(sampleSentences));
+
+    // Play sentence 0 -> when it starts, prefetchUpcoming(0) launches prefetch for sentence 1
+    await act(async () => {
+      result.current.play(0);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // Verify sentence 1 prefetch was dispatched
+    const sentence1Call = mockFetch.mock.calls.find(call => {
+      const body = JSON.parse((call[1]?.body as string) || '{}');
+      return body.text === 'Câu thứ hai.';
+    });
+    expect(sentence1Call).toBeDefined();
+
+    const signal = sentence1Call![1]?.signal as AbortSignal;
+    expect(signal).toBeDefined();
+    expect(signal.aborted).toBe(false);
+
+    abortSpy.mockClear();
+
+    // Call stop() -> must abort the in-flight prefetch request
+    act(() => {
+      result.current.stop();
+    });
+
+    expect(abortSpy).toHaveBeenCalled();
+    expect(signal.aborted).toBe(true);
+
+    // Clean up pending promise
+    resolveSentence1!({
+      ok: true,
+      status: 200,
+      blob: async () => new Blob(['wav1'], { type: 'audio/wav' }),
+    } as unknown as Response);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+  });
+
+  it('reuses in-flight prefetch promise when advancing to that sentence without redundant fetch', async () => {
+    let resolveSentence1: (value: Response) => void;
+    const sentence1Promise = new Promise<Response>(resolve => {
+      resolveSentence1 = resolve;
+    });
+
+    const mockFetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      if (url.includes('/speak')) {
+        const body = JSON.parse((init?.body as string) || '{}');
+        if (body.text === 'Câu thứ nhất.') {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            blob: async () => new Blob(['wav0'], { type: 'audio/wav' }),
+          });
+        }
+        if (body.text === 'Câu thứ hai.') {
+          return sentence1Promise;
+        }
+      }
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        blob: async () => new Blob(['wav'], { type: 'audio/wav' }),
+      });
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    const { result } = renderHook(() => useTTS(sampleSentences));
+    const mainAudio = audioInstances[0];
+
+    // Play sentence 0 -> sentence 1 prefetch starts in background
+    await act(async () => {
+      result.current.play(0);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const callsCountBefore = mockFetch.mock.calls.filter(call => {
+      const body = JSON.parse((call[1]?.body as string) || '{}');
+      return body.text === 'Câu thứ hai.';
+    }).length;
+    expect(callsCountBefore).toBe(1);
+
+    // User advances to sentence 1 while prefetch is in-flight
+    act(() => {
+      result.current.play(1);
+    });
+
+    // Must NOT fire another network fetch for sentence 1
+    const callsCountAfter = mockFetch.mock.calls.filter(call => {
+      const body = JSON.parse((call[1]?.body as string) || '{}');
+      return body.text === 'Câu thứ hai.';
+    }).length;
+    expect(callsCountAfter).toBe(1);
+
+    // Resolve prefetch
+    resolveSentence1!({
+      ok: true,
+      status: 200,
+      blob: async () => new Blob(['wav1'], { type: 'audio/wav' }),
+    } as unknown as Response);
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // Audio source must now be set
+    expect(mainAudio.src).toContain('blob:mock-audio');
+    expect(result.current.currentSentenceIndex).toBe(1);
+  });
+
+  it('handles errors gracefully if a controller abort() throws in clearPrefetchCache()', async () => {
+    const originalAbort = AbortController.prototype.abort;
+    let shouldThrow = false;
+    vi.spyOn(AbortController.prototype, 'abort').mockImplementation(function (this: AbortController) {
+      if (shouldThrow) {
+        throw new Error('Forced abort error');
+      }
+      return originalAbort.apply(this);
+    });
+
+    const mockFetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      if (url.includes('/speak')) {
+        const body = JSON.parse((init?.body as string) || '{}');
+        if (body.text === 'Câu thứ nhất.') {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            blob: async () => new Blob(['wav0'], { type: 'audio/wav' }),
+          });
+        }
+        return new Promise(() => {}); // never resolves
+      }
+      return Promise.resolve({ ok: true });
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    const { result } = renderHook(() => useTTS(sampleSentences));
+
+    await act(async () => {
+      result.current.play(0);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    shouldThrow = true;
+
+    // Should NOT throw unhandled exception
+    expect(() => {
+      act(() => {
+        result.current.stop();
+      });
+    }).not.toThrow();
+
+    expect(result.current.isPlaying).toBe(false);
+  });
 });
