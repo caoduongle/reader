@@ -3,7 +3,7 @@ import { renderHook, act } from '@testing-library/react';
 import { useTTS } from '../../src/hooks/useTTS';
 import { SentenceItem } from '../../src/types';
 
-describe('useTTS hook race condition guards', () => {
+describe('useTTS hook race condition guards & loaded audio index', () => {
   let audioInstances: MockAudio[] = [];
 
   class MockAudio {
@@ -18,6 +18,7 @@ describe('useTTS hook race condition guards', () => {
     onerror: (() => void) | null = null;
     play = vi.fn().mockImplementation(async () => {
       this.paused = false;
+      this.ended = false;
       return Promise.resolve();
     });
     pause = vi.fn().mockImplementation(() => {
@@ -64,7 +65,7 @@ describe('useTTS hook race condition guards', () => {
     localStorage.clear();
   });
 
-  it('Acceptance Criterion 1: does not autoplay when user paused while fetch was in-flight', async () => {
+  it('Acceptance Criterion 1 (Race Guard): does not autoplay when user paused while fetch was in-flight', async () => {
     let resolveFetch: (value: Response) => void;
     const fetchPromise = new Promise<Response>(resolve => {
       resolveFetch = resolve;
@@ -124,7 +125,7 @@ describe('useTTS hook race condition guards', () => {
     expect(mainAudio.src).toBe('');
   });
 
-  it('Acceptance Criterion 2: does not play or assign stale audio when user jumped to another sentence while fetch was in-flight', async () => {
+  it('Acceptance Criterion 2 (Race Guard): does not play or assign stale audio when user jumped to another sentence while fetch was in-flight', async () => {
     let resolveSentence0: (value: Response) => void;
     const sentence0Promise = new Promise<Response>(resolve => {
       resolveSentence0 = resolve;
@@ -202,7 +203,132 @@ describe('useTTS hook race condition guards', () => {
     expect(mainAudio.src).toContain('blob:mock-audio-');
   });
 
-  it('invalidates pending synthesis when stop() is called during in-flight fetch', async () => {
+  it('Acceptance Criterion 3 (Loaded Audio Index): does not replay finished sentence N-1 when user calls play or resume while sentence N is fetching', async () => {
+    let resolveSentence1: (value: Response) => void;
+    const sentence1Promise = new Promise<Response>(resolve => {
+      resolveSentence1 = resolve;
+    });
+
+    const mockFetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      if (url.includes('/speak')) {
+        const body = init?.body ? JSON.parse(init.body as string) : {};
+        if (body.text?.includes('Câu thứ nhất')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            blob: async () => new Blob(['audio-sentence-0'], { type: 'audio/wav' }),
+          });
+        }
+        if (body.text?.includes('Câu thứ hai')) {
+          return sentence1Promise;
+        }
+      }
+      return Promise.resolve({
+        ok: true,
+        blob: async () => new Blob(['default-wav'], { type: 'audio/wav' }),
+      });
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    const { result } = renderHook(() => useTTS(sampleSentences));
+    const mainAudio = audioInstances[0];
+
+    // 1. Play sentence 0 to completion
+    await act(async () => {
+      result.current.play(0);
+    });
+
+    expect(mainAudio.play).toHaveBeenCalledTimes(1);
+    expect(mainAudio.src).toBeTruthy();
+
+    // Mark sentence 0 audio as ended and paused
+    mainAudio.ended = true;
+    mainAudio.paused = true;
+    mainAudio.play.mockClear();
+
+    // 2. Now start playing sentence 1 (fetch is in-flight)
+    act(() => {
+      result.current.play(1);
+    });
+
+    // While sentence 1 is in-flight, audioRef.current.src still holds sentence 0's blob
+    expect(mainAudio.play).not.toHaveBeenCalled();
+
+    // 3. User clicks resume() or play(1) while sentence 1 is still awaiting fetch
+    act(() => {
+      result.current.resume();
+    });
+
+    // CRITICAL: Must NOT have called audio.play() on sentence 0!
+    expect(mainAudio.play).not.toHaveBeenCalled();
+
+    act(() => {
+      result.current.play(1);
+    });
+
+    // Still must NOT have called audio.play() on sentence 0!
+    expect(mainAudio.play).not.toHaveBeenCalled();
+
+    // 4. Resolve sentence 1 fetch
+    const sentence1Blob = new Blob(['audio-sentence-1'], { type: 'audio/wav' });
+    resolveSentence1!({
+      ok: true,
+      status: 200,
+      blob: async () => sentence1Blob,
+    } as unknown as Response);
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // Sentence 1 audio should now play exactly once
+    expect(mainAudio.play).toHaveBeenCalledTimes(1);
+  });
+
+  it('resumes in-place without re-fetching when paused mid-sentence on active audio', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      blob: async () => new Blob(['audio-sentence-0'], { type: 'audio/wav' }),
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    const { result } = renderHook(() => useTTS(sampleSentences));
+    const mainAudio = audioInstances[0];
+
+    // Start playing sentence 0
+    await act(async () => {
+      result.current.play(0);
+    });
+
+    expect(mainAudio.play).toHaveBeenCalledTimes(1);
+    expect(mockFetch).toHaveBeenCalled();
+
+    // User pauses mid-sentence (audio is paused, but not ended)
+    act(() => {
+      result.current.pause();
+    });
+
+    expect(result.current.isPaused).toBe(true);
+    expect(mainAudio.paused).toBe(true);
+    expect(mainAudio.ended).toBe(false);
+
+    mockFetch.mockClear();
+    mainAudio.play.mockClear();
+
+    // User calls resume()
+    await act(async () => {
+      result.current.resume();
+      await Promise.resolve();
+    });
+
+    // Must resume in-place: audio.play() called without triggering fetch
+    expect(mainAudio.play).toHaveBeenCalledTimes(1);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('invalidates pending synthesis and clears loaded index when stop() is called', async () => {
     let resolveFetch: (value: Response) => void;
     const fetchPromise = new Promise<Response>(resolve => {
       resolveFetch = resolve;

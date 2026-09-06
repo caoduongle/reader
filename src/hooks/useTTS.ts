@@ -91,6 +91,7 @@ export function useTTS(
   // Dedicated audio element for previewing test voice
   const testAudioRef = useRef<HTMLAudioElement | null>(null);
   const playTokenRef = useRef<number>(0);
+  const loadedAudioIndexRef = useRef<number | null>(null);
 
   // Initialize single reusable Audio instances
   useEffect(() => {
@@ -551,6 +552,7 @@ export function useTTS(
 
       // Configure audio element
       const clientT1 = performance.now();
+      loadedAudioIndexRef.current = index;
       audio.src = audioBlobUrl;
       audio.playbackRate = Math.max(0.5, Math.min(3.0, settingsRef.current.rate));
       audio.volume = Math.max(0, Math.min(1.0, settingsRef.current.volume));
@@ -600,6 +602,7 @@ export function useTTS(
       };
 
       audio.onerror = () => {
+        loadedAudioIndexRef.current = null;
         const mediaError = audio.error;
         const codeMap: Record<number, string> = {
           1: 'MEDIA_ERR_ABORTED',
@@ -653,15 +656,15 @@ export function useTTS(
       setIsPaused(false);
 
       if (settingsRef.current.ttsProvider === 'rvc-local') {
-        // If already paused on current sentence audio, resume directly
+        const audio = audioRef.current;
+        // If already paused on target sentence audio, resume directly
         if (
-          audioRef.current &&
-          audioRef.current.src &&
-          targetIndex === currentIdxRef.current &&
-          audioRef.current.paused &&
-          !audioRef.current.ended
+          audio &&
+          loadedAudioIndexRef.current === targetIndex &&
+          audio.paused &&
+          !audio.ended
         ) {
-          audioRef.current
+          audio
             .play()
             .then(() => {
               prefetchUpcoming(targetIndex);
@@ -696,8 +699,14 @@ export function useTTS(
   // Resume
   const resume = useCallback(() => {
     if (settingsRef.current.ttsProvider === 'rvc-local') {
-      if (audioRef.current && audioRef.current.src) {
-        audioRef.current
+      const audio = audioRef.current;
+      if (
+        audio &&
+        loadedAudioIndexRef.current === currentIdxRef.current &&
+        audio.paused &&
+        !audio.ended
+      ) {
+        audio
           .play()
           .then(() => {
             setIsPaused(false);
@@ -708,7 +717,7 @@ export function useTTS(
             speakSentence(currentIdxRef.current);
           });
       } else {
-        play(currentSentenceIndex);
+        speakSentence(currentIdxRef.current);
       }
     } else {
       if (typeof window === 'undefined' || !window.speechSynthesis) return;
@@ -737,6 +746,7 @@ export function useTTS(
   // Stop completely
   const stop = useCallback(() => {
     playTokenRef.current += 1;
+    loadedAudioIndexRef.current = null;
     setIsPlaying(false);
     setIsPaused(false);
     setCurrentWordCharIndex(null);
