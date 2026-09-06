@@ -503,9 +503,15 @@ export function useTTS(
       // Check if sentence audio is already cached
       if (prefetchCacheRef.current.has(index)) {
         audioBlobUrl = prefetchCacheRef.current.get(index)!.blobUrl;
+        // Xoa ngay khoi cache: URL nay chuyen sang trang thai "dang duoc audio element su
+        // dung", khong con la "du phong" nua, tranh bi clearPrefetchCache() thu hoi nham
+        // trong luc dang phat/doc do du lieu.
+        prefetchCacheRef.current.delete(index);
       } else if (inFlightFetchesRef.current.has(index)) {
-        // Await in-flight prefetch
         audioBlobUrl = await inFlightFetchesRef.current.get(index)!;
+        // Cung ly do nhu tren: fetchPromise da tu luu vao prefetchCacheRef truoc do (xem
+        // logic prefetch phia tren), nen can xoa o day de dong bo.
+        prefetchCacheRef.current.delete(index);
       }
 
       // If not cached, fetch on demand
