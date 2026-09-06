@@ -104,12 +104,15 @@ async function startPythonBackend(): Promise<void> {
   try {
     console.log(`Spawning Python server: ${pythonExe} ${serverScript}`);
     const logPath = path.join(baseDir, 'server.log');
-    const logStream = fs.createWriteStream(logPath, { flags: 'w' });
+    // Dung fs.openSync() thay vi fs.createWriteStream() de lay ve mot file descriptor (fd)
+    // dang la so nguyen ngay lap tuc (mo file dong bo), tranh loi ERR_INVALID_ARG_VALUE do
+    // WriteStream chua kip mo file (fd con la null) tai thoi diem spawn() duoc goi.
+    const logFd = fs.openSync(logPath, 'w');
 
     pythonProcess = spawn(pythonExe, [serverScript], {
       cwd: baseDir,
       detached: false,
-      stdio: ['ignore', logStream, logStream],
+      stdio: ['ignore', logFd, logFd],
     });
     console.log(`[VoxRead] Log server Python duoc ghi tai: ${logPath}`);
 
@@ -120,6 +123,11 @@ async function startPythonBackend(): Promise<void> {
     pythonProcess.on('exit', (code, signal) => {
       console.log(`Python process exited with code ${code}, signal ${signal}`);
       pythonProcess = null;
+      try {
+        fs.closeSync(logFd);
+      } catch {
+        // fd co the da duoc he thong tu dong dong, bo qua loi neu co
+      }
     });
 
     // Poll health endpoint
