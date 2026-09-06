@@ -113,6 +113,7 @@ async function startPythonBackend(): Promise<void> {
       cwd: baseDir,
       detached: false,
       stdio: ['ignore', logFd, logFd],
+      env: { ...process.env, PYTHONUNBUFFERED: '1' },
     });
     console.log(`[VoxRead] Log server Python duoc ghi tai: ${logPath}`);
 

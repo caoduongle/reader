@@ -498,6 +498,7 @@ export function useTTS(
         onSentenceChange(index);
       }
 
+      const clientT0 = performance.now();
       let audioBlobUrl: string | null = null;
 
       // Check if sentence audio is already cached
@@ -540,11 +541,37 @@ export function useTTS(
       }
 
       // Configure audio element
+      const clientT1 = performance.now();
       audio.src = audioBlobUrl;
       audio.playbackRate = Math.max(0.5, Math.min(3.0, settingsRef.current.rate));
       audio.volume = Math.max(0, Math.min(1.0, settingsRef.current.volume));
 
       // Bind events
+      const audioWithCustomProps = audio as unknown as {
+        __originalOnPlaying?: ((this: GlobalEventHandlers, ev: Event) => any) | null;
+      };
+      const existingHandler =
+        audioWithCustomProps.__originalOnPlaying ??
+        (audio.onplaying && !(audio.onplaying as { __isVoxReadTiming?: boolean }).__isVoxReadTiming
+          ? audio.onplaying
+          : null);
+      if (!audioWithCustomProps.__originalOnPlaying && existingHandler) {
+        audioWithCustomProps.__originalOnPlaying = existingHandler;
+      }
+
+      const timingOnPlaying = (ev: Event) => {
+        if (typeof audioWithCustomProps.__originalOnPlaying === 'function') {
+          audioWithCustomProps.__originalOnPlaying.call(audio, ev);
+        }
+        const clientT2 = performance.now();
+        console.log(
+          `[VoxRead][ClientTiming] Cho fetch/cache: ${(clientT1 - clientT0).toFixed(0)}ms | ` +
+          `Cho audio bat dau phat sau khi gan src: ${(clientT2 - clientT1).toFixed(0)}ms`
+        );
+      };
+      (timingOnPlaying as { __isVoxReadTiming?: boolean }).__isVoxReadTiming = true;
+      audio.onplaying = timingOnPlaying;
+
       audio.onended = () => {
         evictOldCache(index + 1);
         if (isPlayingRef.current && !isPausedRef.current) {
