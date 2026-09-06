@@ -411,5 +411,24 @@ def test_speak_wav_debug_log_emitted(client, capsys):
         assert "duration=" in captured.out
 
 
+def test_print_device_warning_on_cpu(capsys):
+    """Verify print_device_warning outputs warning and install guidance when device is cpu:0."""
+    server.print_device_warning("cpu:0")
+    captured = capsys.readouterr()
+    assert "[VoxRead][Canh bao] Dang chay tren CPU!" in captured.out
+    assert "[VoxRead][Goi y] Neu may co GPU NVIDIA, cai ban PyTorch CUDA bang lenh:" in captured.out
+    assert "pip uninstall torch torchaudio -y" in captured.out
+    assert "pip install torch==2.1.1+cu118 torchaudio==2.1.1+cu118 --index-url https://download.pytorch.org/whl/cu118" in captured.out
 
 
+def test_print_device_warning_on_cuda(capsys):
+    """Verify print_device_warning outputs nothing when device is cuda:0 or other CUDA devices."""
+    server.print_device_warning("cuda:0")
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == ""
+
+    server.print_device_warning("cuda:1")
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == ""

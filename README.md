@@ -91,6 +91,15 @@ Script tự động kiểm tra Node.js (≥ 18) & Python (≥ 3.10), chạy `npm
   ./scripts/setup.sh
   ```
 
+> [!IMPORTANT]
+> **Có GPU NVIDIA rời?** Script trên mặc định cài PyTorch CPU từ `requirements.txt` (nếu script không tự nhận diện được GPU, chạy CPU sẽ chậm hơn nhiều: 15–25 giây/câu thay vì 1–3 giây trên GPU). Sau khi setup xong, nếu cần cài đặt hoặc nâng cấp thủ công PyTorch hỗ trợ CUDA, chạy:
+> ```powershell
+> python-backend\venv\Scripts\activate
+> pip uninstall torch torchaudio -y
+> pip install torch==2.1.1+cu118 torchaudio==2.1.1+cu118 --index-url https://download.pytorch.org/whl/cu118
+> ```
+> Xem thêm lựa chọn phiên bản CUDA phù hợp tại [docs/rvc-voice-setup.md](docs/rvc-voice-setup.md#b2-cài-pytorch-đúng-bản-cho-máy-bạn).
+
 #### 🔑 Bước 2 — Cấu hình biến môi trường (bắt buộc cho tính năng AI, không bắt buộc để đọc sách cơ bản)
 
 Sao chép `.env.example` thành `.env` ở thư mục gốc và điền `GEMINI_API_KEY` (lấy tại [aistudio.google.com/apikey](https://aistudio.google.com/apikey)):

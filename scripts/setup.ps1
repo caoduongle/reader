@@ -205,6 +205,42 @@ else {
     Write-Host "[CANH BAO] Khong tim thay $RequirementsFile, bo qua buoc pip install." -ForegroundColor Yellow
 }
 
+# Kiem tra GPU NVIDIA va tu dong cai dat PyTorch ho tro CUDA
+Write-Host ""
+Write-Host "Dang kiem tra phan cung GPU NVIDIA..." -ForegroundColor Yellow
+$hasNvidiaGpu = $false
+try {
+    $nvidiaSmiCmd = Get-Command nvidia-smi -ErrorAction SilentlyContinue
+    if ($nvidiaSmiCmd) {
+        $null = & nvidia-smi 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            $hasNvidiaGpu = $true
+        }
+    }
+}
+catch {
+    $hasNvidiaGpu = $false
+}
+
+if ($hasNvidiaGpu) {
+    Write-Host "Phat hien GPU NVIDIA! Dang tu dong cai dat PyTorch ho tro CUDA (cu118)..." -ForegroundColor Cyan
+    & $VenvPip install torch==2.1.1+cu118 torchaudio==2.1.1+cu118 --index-url https://download.pytorch.org/whl/cu118
+    if ($LASTEXITCODE -eq 0) {
+        Write-Success "Phat hien GPU NVIDIA! Da tu dong cai dat PyTorch CUDA (cu118)."
+    }
+    else {
+        Write-Host ""
+        Write-Host "[CANH BAO] Khong the tu dong cai dat PyTorch CUDA. Ban co the thu lai thu cong:" -ForegroundColor Yellow
+        Write-Host "  pip install torch==2.1.1+cu118 torchaudio==2.1.1+cu118 --index-url https://download.pytorch.org/whl/cu118" -ForegroundColor White
+        Write-Host "Hoac xem huong dan tai: docs/rvc-voice-setup.md" -ForegroundColor White
+        Write-Host ""
+    }
+}
+else {
+    Write-Host ""
+    Write-Host "[CANH BAO] Khong phat hien GPU NVIDIA - tiep tuc dung PyTorch CPU. (Neu co GPU roi, xem huong dan tai docs/rvc-voice-setup.md)" -ForegroundColor Yellow
+}
+
 # ------------------------------------------------------------------------------
 # Hoan tat
 # ------------------------------------------------------------------------------

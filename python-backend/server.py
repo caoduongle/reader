@@ -89,8 +89,20 @@ def detect_device() -> str:
     return "cuda:0" if torch.cuda.is_available() else "cpu:0"
 
 
+def print_device_warning(device: str) -> None:
+    """
+    In canh bao va huong dan cai dat neu he thong dang chay tren CPU.
+    """
+    if device == "cpu:0":
+        print("[VoxRead][Canh bao] Dang chay tren CPU! Toc do suy luan RVC se cham hon nhieu so voi GPU NVIDIA (15-25s/cau vs 1-3s/cau).")
+        print("[VoxRead][Goi y] Neu may co GPU NVIDIA, cai ban PyTorch CUDA bang lenh:")
+        print("       pip uninstall torch torchaudio -y")
+        print("       pip install torch==2.1.1+cu118 torchaudio==2.1.1+cu118 --index-url https://download.pytorch.org/whl/cu118")
+
+
 DEVICE = detect_device()
 print(f"[VoxRead] Dang dung thiet bi: {DEVICE}")
+print_device_warning(DEVICE)
 
 PORT = 8008
 

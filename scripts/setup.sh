@@ -133,6 +133,21 @@ else
     echo -e "${YELLOW}[CẢNH BÁO] Không tìm thấy ${REQUIREMENTS_FILE}, bỏ qua bước pip install.${NC}"
 fi
 
+# Kiểm tra GPU NVIDIA và tự động cài đặt PyTorch hỗ trợ CUDA
+echo -e "\n${YELLOW}Đang kiểm tra phần cứng GPU NVIDIA...${NC}"
+if command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi >/dev/null 2>&1; then
+    echo -e "${CYAN}Phát hiện GPU NVIDIA! Đang tự động cài đặt PyTorch hỗ trợ CUDA (cu118)...${NC}"
+    if "${VENV_PIP}" install torch==2.1.1+cu118 torchaudio==2.1.1+cu118 --index-url https://download.pytorch.org/whl/cu118; then
+        success "Phát hiện GPU NVIDIA! Đã tự động cài đặt PyTorch CUDA (cu118)."
+    else
+        echo -e "\n${YELLOW}[CẢNH BÁO] Không thể cài đặt PyTorch CUDA tự động. Bạn có thể thử lại thủ công:"
+        echo -e "  pip install torch==2.1.1+cu118 torchaudio==2.1.1+cu118 --index-url https://download.pytorch.org/whl/cu118"
+        echo -e "Hoặc xem hướng dẫn tại: docs/rvc-voice-setup.md${NC}\n"
+    fi
+else
+    echo -e "\n${YELLOW}[CẢNH BÁO] Không phát hiện GPU NVIDIA — tiếp tục dùng PyTorch CPU. (Nếu có GPU rời, xem hướng dẫn tại docs/rvc-voice-setup.md)${NC}"
+fi
+
 # ------------------------------------------------------------------------------
 # Hoàn tất
 # ------------------------------------------------------------------------------
