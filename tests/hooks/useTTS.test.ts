@@ -448,8 +448,7 @@ describe('useTTS hook race condition guards & loaded audio index', () => {
     } as unknown as Response);
 
     await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
+      await new Promise(resolve => setTimeout(resolve, 550));
     });
 
     expect(result.current.isBuffering).toBe(false);
@@ -698,4 +697,212 @@ describe('useTTS hook race condition guards & loaded audio index', () => {
 
     expect(result.current.isPlaying).toBe(false);
   });
+
+  describe('fetchRVCSpeech transient network retry (feature 046)', () => {
+    it('retries once on transient HTTP 500 error after 400ms and succeeds on second attempt', async () => {
+      let speakCallCount = 0;
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const mockFetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+        if (url.includes('/speak')) {
+          const body = JSON.parse((init?.body as string) || '{}');
+          if (body.text === 'Câu thứ nhất.') {
+            speakCallCount++;
+            if (speakCallCount === 1) {
+              return Promise.resolve({
+                ok: false,
+                status: 500,
+                json: async () => ({ error: 'edge_tts.exceptions.NoAudioReceived' }),
+              } as unknown as Response);
+            }
+            return Promise.resolve({
+              ok: true,
+              status: 200,
+              blob: async () => new Blob(['audio-data'], { type: 'audio/wav' }),
+            } as unknown as Response);
+          }
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          blob: async () => new Blob(['wav'], { type: 'audio/wav' }),
+          json: async () => ({ ok: true, model_loaded: true }),
+        });
+      });
+      vi.stubGlobal('fetch', mockFetch);
+
+      const { result } = renderHook(() => useTTS(sampleSentences));
+      const mainAudio = audioInstances[0];
+
+      await act(async () => {
+        result.current.play(0);
+      });
+
+      // Wait for the 400ms retry backoff delay to complete and promise to resolve
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 550));
+      });
+
+      const sentence0Calls = mockFetch.mock.calls.filter(call => {
+        const body = JSON.parse((call[1]?.body as string) || '{}');
+        return body.text === 'Câu thứ nhất.';
+      });
+      expect(sentence0Calls.length).toBe(2);
+
+      // Successfully resolved audio blob URL
+      expect(mainAudio.src).toContain('blob:mock-audio');
+      expect(result.current.isPlaying).toBe(true);
+      expect(result.current.serverErrorMessage).toBeNull();
+
+      // Warning logged
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('[VoxRead] Retry fetch RVC speech sau lỗi')
+      );
+    });
+
+    it('does NOT retry on HTTP 400 client error (fail fast with 1 call)', async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const mockFetch = vi.fn().mockImplementation((url: string) => {
+        if (url.includes('/speak')) {
+          return Promise.resolve({
+            ok: false,
+            status: 400,
+            json: async () => ({ error: 'Invalid text parameter' }),
+          } as unknown as Response);
+        }
+        return Promise.resolve({ ok: true });
+      });
+      vi.stubGlobal('fetch', mockFetch);
+
+      const { result } = renderHook(() => useTTS(sampleSentences));
+
+      await act(async () => {
+        result.current.play(0);
+      });
+
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 550));
+      });
+
+      const speakCalls = mockFetch.mock.calls.filter(call => call[0].includes('/speak'));
+      expect(speakCalls.length).toBe(1);
+      expect(result.current.isPlaying).toBe(false);
+      expect(result.current.serverErrorMessage).toBe('Invalid text parameter');
+    });
+
+    it('does NOT retry on HTTP 503 model unavailable (fail fast with 1 call)', async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const mockFetch = vi.fn().mockImplementation((url: string) => {
+        if (url.includes('/speak')) {
+          return Promise.resolve({
+            ok: false,
+            status: 503,
+            json: async () => ({ error: 'RVC model not loaded' }),
+          } as unknown as Response);
+        }
+        return Promise.resolve({ ok: true });
+      });
+      vi.stubGlobal('fetch', mockFetch);
+
+      const { result } = renderHook(() => useTTS(sampleSentences));
+
+      await act(async () => {
+        result.current.play(0);
+      });
+
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 550));
+      });
+
+      const speakCalls = mockFetch.mock.calls.filter(call => call[0].includes('/speak'));
+      expect(speakCalls.length).toBe(1);
+      expect(result.current.isPlaying).toBe(false);
+      expect(result.current.serverErrorMessage).toBe('RVC model not loaded');
+    });
+
+    it('does NOT retry if user stops/aborts during 400ms delay', async () => {
+      let sentence1Calls = 0;
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const mockFetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+        if (url.includes('/speak')) {
+          const body = JSON.parse((init?.body as string) || '{}');
+          if (body.text === 'Câu thứ nhất.') {
+            return Promise.resolve({
+              ok: true,
+              status: 200,
+              blob: async () => new Blob(['wav0'], { type: 'audio/wav' }),
+            } as unknown as Response);
+          }
+          if (body.text === 'Câu thứ hai.') {
+            sentence1Calls++;
+            return Promise.resolve({
+              ok: false,
+              status: 500,
+              json: async () => ({ error: 'edge_tts.exceptions.NoAudioReceived' }),
+            } as unknown as Response);
+          }
+        }
+        return Promise.resolve({ ok: true });
+      });
+      vi.stubGlobal('fetch', mockFetch);
+
+      const { result } = renderHook(() => useTTS(sampleSentences));
+
+      await act(async () => {
+        result.current.play(0);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      // Sentence 1 prefetch failed with 500 once and entered 400ms backoff
+      expect(sentence1Calls).toBe(1);
+
+      // Stop while backoff is waiting -> aborts in-flight prefetch controller
+      act(() => {
+        result.current.stop();
+      });
+
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 550));
+      });
+
+      // Sentence 1 must NOT have fired a retry call
+      expect(sentence1Calls).toBe(1);
+    });
+
+    it('bounds retries to maximum 1 retry on persistent HTTP 500 errors (total 2 calls)', async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const mockFetch = vi.fn().mockImplementation((url: string) => {
+        if (url.includes('/speak')) {
+          return Promise.resolve({
+            ok: false,
+            status: 500,
+            json: async () => ({ error: 'Persistent server failure' }),
+          } as unknown as Response);
+        }
+        return Promise.resolve({ ok: true });
+      });
+      vi.stubGlobal('fetch', mockFetch);
+
+      const { result } = renderHook(() => useTTS(sampleSentences));
+
+      await act(async () => {
+        result.current.play(0);
+      });
+
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 600));
+      });
+
+      const speakCalls = mockFetch.mock.calls.filter(call => call[0].includes('/speak'));
+      expect(speakCalls.length).toBe(2);
+      expect(result.current.isPlaying).toBe(false);
+      expect(result.current.serverErrorMessage).toBe('Persistent server failure');
+    });
+  });
 });
+

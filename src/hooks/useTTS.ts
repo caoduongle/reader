@@ -311,14 +311,18 @@ export function useTTS(
     }, 10000);
   }, [stopKeepAlive]);
 
-  // Helper to fetch RVC speech audio blob from server
+  // Helper to fetch RVC speech audio blob from server with transient retry
   const fetchRVCSpeech = useCallback(
     async (
       text: string,
       serverUrl: string,
-      abortController?: AbortController
+      abortController?: AbortController,
+      maxRetries: number = 1
     ): Promise<string | null> => {
       const cleanUrl = serverUrl.replace(/\/+$/, '');
+      let status: number | null = null;
+      let errorMsg = 'Lỗi kết nối server giọng đọc';
+
       try {
         const res = await fetch(`${cleanUrl}/speak`, {
           method: 'POST',
@@ -328,6 +332,7 @@ export function useTTS(
         });
 
         if (!res.ok) {
+          status = res.status;
           let errorDetail = `Lỗi server (${res.status}): Không thể tạo giọng đọc`;
           try {
             const errData = await res.json();
@@ -337,6 +342,7 @@ export function useTTS(
           } catch {
             // fallback
           }
+          errorMsg = errorDetail;
           throw new Error(errorDetail);
         }
 
@@ -349,7 +355,30 @@ export function useTTS(
         if (err instanceof Error && err.name === 'AbortError') {
           return null;
         }
-        const errorMsg = err instanceof Error ? err.message : 'Lỗi kết nối server giọng đọc';
+        if (abortController?.signal?.aborted) {
+          return null;
+        }
+
+        if (err instanceof Error && status === null) {
+          errorMsg = err.message;
+        }
+
+        // Determine retry eligibility:
+        // - HTTP 5xx errors EXCEPT HTTP 503 (503 indicates model unavailable)
+        // - Network/transport errors without HTTP response status (excluding empty blob)
+        const isRetryable =
+          (status !== null && status >= 500 && status !== 503) ||
+          (status === null && (err instanceof Error ? err.message !== 'Received empty audio blob' : true));
+
+        if (isRetryable && maxRetries > 0 && !abortController?.signal?.aborted) {
+          console.warn(`[VoxRead] Retry fetch RVC speech sau lỗi: ${errorMsg}`);
+          await new Promise(resolve => setTimeout(resolve, 400));
+          if (abortController?.signal?.aborted) {
+            return null;
+          }
+          return fetchRVCSpeech(text, serverUrl, abortController, maxRetries - 1);
+        }
+
         console.warn('RVC speech synthesis fetch failed:', errorMsg);
         setServerErrorMessage(errorMsg);
         return null;
@@ -357,6 +386,7 @@ export function useTTS(
     },
     []
   );
+
 
   // Background prefetch for upcoming sentences (N+1, N+2)
   const prefetchUpcoming = useCallback(
