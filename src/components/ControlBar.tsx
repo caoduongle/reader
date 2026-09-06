@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   Play,
   Pause,
+  Loader2,
   SkipBack,
   SkipForward,
   Volume2,
@@ -15,6 +16,7 @@ import { TTSSettings, ThemeMode } from '../types';
 interface ControlBarProps {
   isPlaying: boolean;
   isPaused: boolean;
+  isBuffering?: boolean;
   currentSentenceIndex: number;
   totalSentences: number;
   currentChapterTitle: string;
@@ -37,6 +39,7 @@ interface ControlBarProps {
 export const ControlBar: React.FC<ControlBarProps> = ({
   isPlaying,
   isPaused,
+  isBuffering = false,
   currentSentenceIndex,
   totalSentences,
   currentChapterTitle,
@@ -100,11 +103,25 @@ export const ControlBar: React.FC<ControlBarProps> = ({
               id="tts-play-pause-btn"
               type="button"
               onClick={onTogglePlay}
-              title={isPlaying && !isPaused ? 'Tạm dừng (Phím Space)' : 'Phát tiếp (Phím Space)'}
-              aria-label={isPlaying && !isPaused ? 'Tạm dừng' : 'Phát tiếp'}
+              title={
+                isBuffering
+                  ? 'Đang tạo giọng đọc...'
+                  : isPlaying && !isPaused
+                    ? 'Tạm dừng (Phím Space)'
+                    : 'Phát tiếp (Phím Space)'
+              }
+              aria-label={
+                isBuffering
+                  ? 'Đang tạo giọng đọc...'
+                  : isPlaying && !isPaused
+                    ? 'Tạm dừng'
+                    : 'Phát tiếp'
+              }
               className="w-11 h-11 min-w-[44px] min-h-[44px] rounded-full bg-amber-600 hover:bg-amber-500 active:scale-95 text-black flex items-center justify-center shadow-lg shadow-amber-500/25 transition-all cursor-pointer touch-manipulation"
             >
-              {isPlaying && !isPaused ? (
+              {isBuffering ? (
+                <Loader2 className="w-4 h-4 animate-spin text-black" />
+              ) : isPlaying && !isPaused ? (
                 <Pause className="w-4 h-4 fill-black text-black" />
               ) : (
                 <Play className="w-4 h-4 fill-black text-black ml-0.5" />

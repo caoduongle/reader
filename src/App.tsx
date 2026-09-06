@@ -197,6 +197,7 @@ export default function App() {
     updateSettings,
     isPlaying,
     isPaused,
+    isBuffering,
     currentSentenceIndex,
     play,
     togglePlay,
@@ -571,6 +572,7 @@ export default function App() {
       <ControlBar
         isPlaying={isPlaying}
         isPaused={isPaused}
+        isBuffering={isBuffering}
         currentSentenceIndex={currentSentenceIndex}
         totalSentences={currentSentences.length}
         currentChapterTitle={currentChapter?.title || 'No Chapter'}

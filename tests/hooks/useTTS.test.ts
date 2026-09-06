@@ -374,4 +374,137 @@ describe('useTTS hook race condition guards & loaded audio index', () => {
     expect(mainAudio.play).not.toHaveBeenCalled();
     expect(mainAudio.src).toBe('');
   });
+
+  it('sets isBuffering to true during RVC fetch and reverts to false once audio.src is configured', async () => {
+    let resolveFetch: (value: Response) => void;
+    const fetchPromise = new Promise<Response>(resolve => {
+      resolveFetch = resolve;
+    });
+
+    const mockFetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/speak')) {
+        return fetchPromise;
+      }
+      return Promise.resolve({ ok: true });
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    const { result } = renderHook(() => useTTS(sampleSentences));
+    const mainAudio = audioInstances[0];
+
+    expect(result.current.isBuffering).toBe(false);
+
+    act(() => {
+      result.current.play(0);
+    });
+
+    // In-flight fetch: isBuffering must be true
+    expect(result.current.isBuffering).toBe(true);
+
+    // Resolve fetch
+    resolveFetch!({
+      ok: true,
+      status: 200,
+      blob: async () => new Blob(['wav'], { type: 'audio/wav' }),
+    } as unknown as Response);
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // Once audio.src is configured, isBuffering must revert to false
+    expect(result.current.isBuffering).toBe(false);
+    expect(mainAudio.src).toContain('blob:mock-audio');
+  });
+
+  it('resets isBuffering to false when RVC fetch fails', async () => {
+    let resolveFetch: (value: Response) => void;
+    const fetchPromise = new Promise<Response>(resolve => {
+      resolveFetch = resolve;
+    });
+
+    const mockFetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/speak')) {
+        return fetchPromise;
+      }
+      return Promise.resolve({ ok: true });
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    const { result } = renderHook(() => useTTS(sampleSentences));
+
+    act(() => {
+      result.current.play(0);
+    });
+
+    expect(result.current.isBuffering).toBe(true);
+
+    // Simulate server failure
+    resolveFetch!({
+      ok: false,
+      status: 500,
+      json: async () => ({ error: 'Internal Server Error' }),
+    } as unknown as Response);
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(result.current.isBuffering).toBe(false);
+    expect(result.current.isPlaying).toBe(false);
+  });
+
+  it('resets isBuffering to false when stop() or pause() is called while fetch is in-flight', async () => {
+    let resolveFetch: (value: Response) => void;
+    const fetchPromise = new Promise<Response>(resolve => {
+      resolveFetch = resolve;
+    });
+
+    const mockFetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/speak')) {
+        return fetchPromise;
+      }
+      return Promise.resolve({ ok: true });
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    const { result } = renderHook(() => useTTS(sampleSentences));
+
+    // Test stop() reset
+    act(() => {
+      result.current.play(0);
+    });
+    expect(result.current.isBuffering).toBe(true);
+
+    act(() => {
+      result.current.stop();
+    });
+    expect(result.current.isBuffering).toBe(false);
+
+    // Test pause() reset
+    act(() => {
+      result.current.play(1);
+    });
+    expect(result.current.isBuffering).toBe(true);
+
+    act(() => {
+      result.current.pause();
+    });
+    expect(result.current.isBuffering).toBe(false);
+    expect(result.current.isPaused).toBe(true);
+
+    // Cleanup pending promise
+    resolveFetch!({
+      ok: true,
+      status: 200,
+      blob: async () => new Blob(['wav'], { type: 'audio/wav' }),
+    } as unknown as Response);
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+  });
 });

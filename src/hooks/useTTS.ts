@@ -58,6 +58,7 @@ export function useTTS(
 
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [isPaused, setIsPaused] = useState<boolean>(false);
+  const [isBuffering, setIsBuffering] = useState<boolean>(false);
   const [currentSentenceIndex, setCurrentSentenceIndex] = useState<number>(0);
   const [currentWordCharIndex, setCurrentWordCharIndex] = useState<number | null>(null);
   const [rvcServerStatus, setRvcServerStatus] = useState<RVCServerStatus>('unknown');
@@ -504,58 +505,64 @@ export function useTTS(
       }
 
       const clientT0 = performance.now();
+      let clientT1 = 0;
       let audioBlobUrl: string | null = null;
 
-      // Check if sentence audio is already cached
-      if (prefetchCacheRef.current.has(index)) {
-        audioBlobUrl = prefetchCacheRef.current.get(index)!.blobUrl;
-        // Xoa ngay khoi cache: URL nay chuyen sang trang thai "dang duoc audio element su
-        // dung", khong con la "du phong" nua, tranh bi clearPrefetchCache() thu hoi nham
-        // trong luc dang phat/doc do du lieu.
-        prefetchCacheRef.current.delete(index);
-      } else if (inFlightFetchesRef.current.has(index)) {
-        audioBlobUrl = await inFlightFetchesRef.current.get(index)!;
-        // Cung ly do nhu tren: fetchPromise da tu luu vao prefetchCacheRef truoc do (xem
-        // logic prefetch phia tren), nen can xoa o day de dong bo.
-        prefetchCacheRef.current.delete(index);
-      }
-
-      // If not cached, fetch on demand
-      if (!audioBlobUrl) {
-        const controller = new AbortController();
-        audioBlobUrl = await fetchRVCSpeech(
-          textToSpeak,
-          settingsRef.current.rvcServerUrl,
-          controller
-        );
-      }
-
-      // If fetch failed or was aborted while navigating
-      if (!audioBlobUrl) {
-        if (isPlayingRef.current && currentIdxRef.current === index) {
-          setIsPlaying(false);
-          setIsPaused(false);
-          setServerErrorMessage(prev => prev || 'Không thể tạo âm thanh từ server RVC.');
+      setIsBuffering(true);
+      try {
+        // Check if sentence audio is already cached
+        if (prefetchCacheRef.current.has(index)) {
+          audioBlobUrl = prefetchCacheRef.current.get(index)!.blobUrl;
+          // Xoa ngay khoi cache: URL nay chuyen sang trang thai "dang duoc audio element su
+          // dung", khong con la "du phong" nua, tranh bi clearPrefetchCache() thu hoi nham
+          // trong luc dang phat/doc do du lieu.
+          prefetchCacheRef.current.delete(index);
+        } else if (inFlightFetchesRef.current.has(index)) {
+          audioBlobUrl = await inFlightFetchesRef.current.get(index)!;
+          // Cung ly do nhu tren: fetchPromise da tu luu vao prefetchCacheRef truoc do (xem
+          // logic prefetch phia tren), nen can xoa o day de dong bo.
+          prefetchCacheRef.current.delete(index);
         }
-        return;
-      }
 
-      // Stale check: verify user hasn't jumped to another sentence or paused while fetching
-      if (
-        playTokenRef.current !== myToken ||
-        !isPlayingRef.current ||
-        isPausedRef.current ||
-        currentIdxRef.current !== index
-      ) {
-        return;
-      }
+        // If not cached, fetch on demand
+        if (!audioBlobUrl) {
+          const controller = new AbortController();
+          audioBlobUrl = await fetchRVCSpeech(
+            textToSpeak,
+            settingsRef.current.rvcServerUrl,
+            controller
+          );
+        }
 
-      // Configure audio element
-      const clientT1 = performance.now();
-      loadedAudioIndexRef.current = index;
-      audio.src = audioBlobUrl;
-      audio.playbackRate = Math.max(0.5, Math.min(3.0, settingsRef.current.rate));
-      audio.volume = Math.max(0, Math.min(1.0, settingsRef.current.volume));
+        // If fetch failed or was aborted while navigating
+        if (!audioBlobUrl) {
+          if (isPlayingRef.current && currentIdxRef.current === index) {
+            setIsPlaying(false);
+            setIsPaused(false);
+            setServerErrorMessage(prev => prev || 'Không thể tạo âm thanh từ server RVC.');
+          }
+          return;
+        }
+
+        // Stale check: verify user hasn't jumped to another sentence or paused while fetching
+        if (
+          playTokenRef.current !== myToken ||
+          !isPlayingRef.current ||
+          isPausedRef.current ||
+          currentIdxRef.current !== index
+        ) {
+          return;
+        }
+
+        // Configure audio element
+        clientT1 = performance.now();
+        loadedAudioIndexRef.current = index;
+        audio.src = audioBlobUrl;
+        audio.playbackRate = Math.max(0.5, Math.min(3.0, settingsRef.current.rate));
+        audio.volume = Math.max(0, Math.min(1.0, settingsRef.current.volume));
+      } finally {
+        setIsBuffering(false);
+      }
 
       // Bind events
       const audioWithCustomProps = audio as unknown as {
@@ -684,6 +691,7 @@ export function useTTS(
   // Pause
   const pause = useCallback(() => {
     setIsPaused(true);
+    setIsBuffering(false);
     if (settingsRef.current.ttsProvider === 'rvc-local') {
       if (audioRef.current) {
         audioRef.current.pause();
@@ -749,6 +757,7 @@ export function useTTS(
     loadedAudioIndexRef.current = null;
     setIsPlaying(false);
     setIsPaused(false);
+    setIsBuffering(false);
     setCurrentWordCharIndex(null);
 
     if (settingsRef.current.ttsProvider === 'rvc-local') {
@@ -932,6 +941,7 @@ export function useTTS(
     updateSettings,
     isPlaying,
     isPaused,
+    isBuffering,
     currentSentenceIndex,
     currentWordCharIndex,
     rvcServerStatus,
