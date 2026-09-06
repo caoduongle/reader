@@ -904,5 +904,169 @@ describe('useTTS hook race condition guards & loaded audio index', () => {
       expect(result.current.serverErrorMessage).toBe('Persistent server failure');
     });
   });
+
+  describe('fetchRVCSpeech 20s client-side timeout (feature 047)', () => {
+    it('automatically aborts hanging speech fetch after 20,000ms timeout and resets playback', async () => {
+      vi.useFakeTimers();
+      let capturedSignal: AbortSignal | null = null;
+
+      const mockFetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+        if (url.includes('/speak')) {
+          capturedSignal = init?.signal as AbortSignal;
+          return new Promise((_, reject) => {
+            if (capturedSignal?.aborted) {
+              const err = new Error('The operation was aborted');
+              err.name = 'AbortError';
+              reject(err);
+            } else {
+              capturedSignal?.addEventListener('abort', () => {
+                const err = new Error('The operation was aborted');
+                err.name = 'AbortError';
+                reject(err);
+              });
+            }
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({ ok: true, model_loaded: true }),
+        });
+      });
+      vi.stubGlobal('fetch', mockFetch);
+
+      const { result } = renderHook(() => useTTS(sampleSentences));
+
+      act(() => {
+        result.current.play(0);
+      });
+
+      expect(result.current.isPlaying).toBe(true);
+      expect(capturedSignal).toBeDefined();
+      expect(capturedSignal!.aborted).toBe(false);
+
+      // Advance clock by 20,000ms
+      await act(async () => {
+        vi.advanceTimersByTime(20000);
+      });
+
+      expect(capturedSignal!.aborted).toBe(true);
+      expect(result.current.isPlaying).toBe(false);
+
+      vi.useRealTimers();
+    });
+
+    it('cleans up timeout timer via clearTimeout when fetch completes early', async () => {
+      const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout');
+
+      const mockFetch = vi.fn().mockImplementation((url: string) => {
+        if (url.includes('/speak')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            blob: async () => new Blob(['fast-audio'], { type: 'audio/wav' }),
+          } as unknown as Response);
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({ ok: true, model_loaded: true }),
+        });
+      });
+      vi.stubGlobal('fetch', mockFetch);
+
+      const { result } = renderHook(() => useTTS(sampleSentences));
+
+      await act(async () => {
+        result.current.play(0);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(clearTimeoutSpy).toHaveBeenCalled();
+    });
+
+    it('preserves 2500ms timeout for /health probe without altering it', async () => {
+      vi.useFakeTimers();
+      let healthSignal: AbortSignal | null = null;
+
+      const mockFetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+        if (url.includes('/health')) {
+          healthSignal = init?.signal as AbortSignal;
+          return new Promise(() => {}); // never resolves
+        }
+        return Promise.resolve({ ok: true });
+      });
+      vi.stubGlobal('fetch', mockFetch);
+
+      renderHook(() => useTTS(sampleSentences));
+
+      // After mount, checkRVCServerHealth triggers on /health
+      expect(healthSignal).toBeDefined();
+      expect(healthSignal!.aborted).toBe(false);
+
+      // Advance by 2500ms -> should abort the health probe
+      await act(async () => {
+        vi.advanceTimersByTime(2500);
+      });
+
+      expect(healthSignal!.aborted).toBe(true);
+      vi.useRealTimers();
+    });
+
+    it('automatically aborts hanging background prefetch after 20,000ms', async () => {
+      vi.useFakeTimers();
+      let prefetchSignal: AbortSignal | null = null;
+
+      const mockFetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+        if (url.includes('/speak')) {
+          const body = JSON.parse((init?.body as string) || '{}');
+          if (body.text === 'Câu thứ nhất.') {
+            return Promise.resolve({
+              ok: true,
+              status: 200,
+              blob: async () => new Blob(['wav0'], { type: 'audio/wav' }),
+            } as unknown as Response);
+          }
+          if (body.text === 'Câu thứ hai.') {
+            prefetchSignal = init?.signal as AbortSignal;
+            return new Promise((_, reject) => {
+              prefetchSignal?.addEventListener('abort', () => {
+                const err = new Error('The operation was aborted');
+                err.name = 'AbortError';
+                reject(err);
+              });
+            });
+          }
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          blob: async () => new Blob(['wav'], { type: 'audio/wav' }),
+          json: async () => ({ ok: true, model_loaded: true }),
+        });
+      });
+      vi.stubGlobal('fetch', mockFetch);
+
+      const { result } = renderHook(() => useTTS(sampleSentences));
+
+      await act(async () => {
+        result.current.play(0);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(prefetchSignal).toBeDefined();
+      expect(prefetchSignal!.aborted).toBe(false);
+
+      // Advance by 20,000ms -> should abort hanging prefetch
+      await act(async () => {
+        vi.advanceTimersByTime(20000);
+      });
+
+      expect(prefetchSignal!.aborted).toBe(true);
+      vi.useRealTimers();
+    });
+  });
 });
 

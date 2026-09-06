@@ -26,6 +26,7 @@ export const DEFAULT_SETTINGS: TTSSettings = {
 
 const SETTINGS_STORAGE_KEY = 'voxread_tts_settings_v1';
 const MAX_PREFETCH_AHEAD = 2; // Prefetch next 2 sentences (N+1, N+2)
+const RVC_FETCH_TIMEOUT_MS = 20000; // 20s timeout for RVC speech synthesis
 
 interface CacheEntry {
   blobUrl: string;
@@ -311,7 +312,7 @@ export function useTTS(
     }, 10000);
   }, [stopKeepAlive]);
 
-  // Helper to fetch RVC speech audio blob from server with transient retry
+  // Helper to fetch RVC speech audio blob from server with transient retry & timeout
   const fetchRVCSpeech = useCallback(
     async (
       text: string,
@@ -320,6 +321,8 @@ export function useTTS(
       maxRetries: number = 1
     ): Promise<string | null> => {
       const cleanUrl = serverUrl.replace(/\/+$/, '');
+      const controller = abortController || new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), RVC_FETCH_TIMEOUT_MS);
       let status: number | null = null;
       let errorMsg = 'Lỗi kết nối server giọng đọc';
 
@@ -328,7 +331,7 @@ export function useTTS(
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text, language: 'vi' }),
-          signal: abortController?.signal,
+          signal: controller.signal,
         });
 
         if (!res.ok) {
@@ -355,7 +358,7 @@ export function useTTS(
         if (err instanceof Error && err.name === 'AbortError') {
           return null;
         }
-        if (abortController?.signal?.aborted) {
+        if (controller.signal.aborted) {
           return null;
         }
 
@@ -370,10 +373,10 @@ export function useTTS(
           (status !== null && status >= 500 && status !== 503) ||
           (status === null && (err instanceof Error ? err.message !== 'Received empty audio blob' : true));
 
-        if (isRetryable && maxRetries > 0 && !abortController?.signal?.aborted) {
+        if (isRetryable && maxRetries > 0 && !controller.signal.aborted) {
           console.warn(`[VoxRead] Retry fetch RVC speech sau lỗi: ${errorMsg}`);
           await new Promise(resolve => setTimeout(resolve, 400));
-          if (abortController?.signal?.aborted) {
+          if (controller.signal.aborted) {
             return null;
           }
           return fetchRVCSpeech(text, serverUrl, abortController, maxRetries - 1);
@@ -382,6 +385,8 @@ export function useTTS(
         console.warn('RVC speech synthesis fetch failed:', errorMsg);
         setServerErrorMessage(errorMsg);
         return null;
+      } finally {
+        clearTimeout(timeoutId);
       }
     },
     []
