@@ -548,7 +548,7 @@ export function useTTS(
 
       // Bind events
       const audioWithCustomProps = audio as unknown as {
-        __originalOnPlaying?: ((this: GlobalEventHandlers, ev: Event) => any) | null;
+        __originalOnPlaying?: ((this: GlobalEventHandlers, ev: Event) => unknown) | null;
       };
       const existingHandler =
         audioWithCustomProps.__originalOnPlaying ??
