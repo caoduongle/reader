@@ -91,15 +91,29 @@ fi
 # ------------------------------------------------------------------------------
 # Bước 3: Cài đặt Node.js dependencies
 # ------------------------------------------------------------------------------
-step_header "Bước 3/4: Cài đặt JavaScript dependencies qua npm..."
+step_header "Bước 3/5: Cài đặt JavaScript dependencies qua npm..."
 
 npm install
 success "Cài đặt npm dependencies thành công!"
 
 # ------------------------------------------------------------------------------
-# Bước 4: Thiết lập Python Backend Virtualenv & Dependencies
+# Bước 4: Cài đặt trình duyệt Chromium cho Playwright (đọc trang web động)
 # ------------------------------------------------------------------------------
-step_header "Bước 4/4: Thiết lập Python backend (virtualenv & requirements)..."
+step_header "Bước 4/5: Cài đặt Chromium cho Playwright (tính năng Đọc từ liên kết với trang JS động)..."
+
+echo -e "${YELLOW}Bước này tải về Chromium headless (~150-300MB), chỉ dùng cho các trang web nạp nội dung bằng JavaScript (ví dụ docln.sbs).${NC}"
+if npx --yes playwright install --with-deps chromium; then
+    success "Đã cài đặt Chromium cho Playwright thành công!"
+else
+    echo -e "\n${YELLOW}[CẢNH BÁO] Không thể cài đặt Chromium cho Playwright (có thể do mạng bị chặn).${NC}"
+    echo -e "${YELLOW}Tính năng đọc URL cơ bản vẫn hoạt động bình thường; chỉ các trang cần JavaScript mới bị ảnh hưởng.${NC}"
+    echo -e "${YELLOW}Bạn có thể thử lại thủ công sau: npx playwright install chromium${NC}\n"
+fi
+
+# ------------------------------------------------------------------------------
+# Bước 5: Thiết lập Python Backend Virtualenv & Dependencies
+# ------------------------------------------------------------------------------
+step_header "Bước 5/5: Thiết lập Python backend (virtualenv & requirements)..."
 
 BACKEND_DIR="${PROJECT_ROOT}/python-backend"
 VENV_DIR="${BACKEND_DIR}/venv"

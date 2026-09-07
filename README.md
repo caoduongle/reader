@@ -108,7 +108,10 @@ Sao chép `.env.example` thành `.env` ở thư mục gốc và điền `GEMINI_
 cp .env.example .env   # Windows: copy .env.example .env
 ```
 
-`GEMINI_API_KEY` chỉ cần thiết cho tính năng **OCR đọc màn hình** và **đọc nội dung từ URL**. Nếu bỏ qua, app vẫn đọc file TXT/EPUB/PDF và phát giọng bình thường, chỉ 2 tính năng trên sẽ báo lỗi "chưa cấu hình".
+`GEMINI_API_KEY` chỉ cần thiết cho tính năng **OCR đọc màn hình** và **đọc nội dung từ URL** (dùng làm phương án cuối khi cả bộ chọn theo trang lẫn Readability đều không trích xuất được). Nếu bỏ qua, app vẫn đọc file TXT/EPUB/PDF và phát giọng bình thường, chỉ 2 tính năng trên sẽ báo lỗi "chưa cấu hình".
+
+> [!NOTE]
+> **Đọc URL từ các trang nạp nội dung bằng JavaScript** (ví dụ docln.sbs — nội dung chương chỉ xuất hiện sau khi chạy JS phía client): script setup ở Bước 1 đã tự chạy `npx playwright install chromium` (~150–300MB, tải trình duyệt Chromium headless). Nếu bước đó bị bỏ qua hoặc thất bại do mạng, chỉ tính năng đọc các trang JS-động này bị ảnh hưởng — đọc file và các trang web tĩnh/render sẵn phía server vẫn hoạt động bình thường. Cài lại thủ công bất cứ lúc nào bằng: `npx playwright install chromium`. Lưu ý: bản cài đặt `.exe` đóng gói sẵn (Cách 1) hiện **chưa** đóng gói kèm Chromium này — tính năng chỉ khả dụng khi build từ mã nguồn (Cách 2).
 
 #### 📖 Bước 3 — Khởi động & đóng gói ứng dụng
 
@@ -192,7 +195,7 @@ Hai dịch vụ backend chạy cục bộ (loopback), được Electron tự kh�
 2. **`server.js` (cổng 3001)** — Express, gateway bảo vệ `GEMINI_API_KEY`:
    - `/api/generate`: proxy gọi Gemini API.
    - `/api/ocr`: nhận diện chữ từ ảnh chụp màn hình bằng Gemini Vision, kèm xác thực magic bytes.
-   - `/api/fetch-url`: trích xuất nội dung văn bản từ URL, chống SSRF (`lib/ssrfGuard.js`) và làm sạch XSS (`server/lib/sanitizer.js`).
+   - `/api/fetch-url`: trích xuất nội dung văn bản từ URL, chống SSRF (`lib/ssrfGuard.js`) và làm sạch XSS (`server/lib/sanitizer.js`). Thứ tự trích xuất: bộ chọn CSS riêng theo từng trang (`server/lib/siteAdapters.js`, ví dụ docln/Hako, Zuminovel) → `@mozilla/readability` → nếu nội dung tĩnh vẫn quá ít (trang nạp nội dung bằng JavaScript), tự động hiển thị lại trang bằng trình duyệt ảo Chromium headless (`lib/renderPage.js`, dùng Playwright, có SSRF guard riêng cho từng request con) → cuối cùng mới đến Gemini AI. Liên kết "chương sau" được dò bằng `server/lib/nextChapter.js` (nhiều chiến lược: `rel="next"`, bộ chọn theo trang, từ khoá, tên class/id).
 
 ---
 

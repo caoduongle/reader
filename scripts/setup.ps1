@@ -118,7 +118,7 @@ if (-not $PythonCmd) {
 # ------------------------------------------------------------------------------
 # Buoc 3: Cai dat Node.js dependencies
 # ------------------------------------------------------------------------------
-Write-Step "Buoc 3/4: Cai dat JavaScript dependencies qua npm..."
+Write-Step "Buoc 3/5: Cai dat JavaScript dependencies qua npm..."
 
 & npm install
 if ($LASTEXITCODE -ne 0) {
@@ -127,9 +127,27 @@ if ($LASTEXITCODE -ne 0) {
 Write-Success "Cai dat npm dependencies thanh cong!"
 
 # ------------------------------------------------------------------------------
-# Buoc 4: Thiet lap Python Backend Virtualenv & Dependencies
+# Buoc 4: Cai dat trinh duyet Chromium cho Playwright (doc trang web dong)
 # ------------------------------------------------------------------------------
-Write-Step "Buoc 4/4: Thiet lap Python backend (virtualenv & requirements)..."
+Write-Step "Buoc 4/5: Cai dat Chromium cho Playwright (tinh nang Doc tu lien ket voi trang JS dong)..."
+
+Write-Host "Buoc nay tai ve Chromium headless (~150-300MB), chi dung cho cac trang web nap noi dung bang JavaScript (vi du docln.sbs)." -ForegroundColor Yellow
+& npx --yes playwright install chromium
+if ($LASTEXITCODE -ne 0) {
+    Write-Host ""
+    Write-Host "[CANH BAO] Khong the cai dat Chromium cho Playwright (co the do mang bi chan)." -ForegroundColor Yellow
+    Write-Host "Tinh nang doc URL co ban van hoat dong binh thuong; chi cac trang can JavaScript moi bi anh huong." -ForegroundColor Yellow
+    Write-Host "Ban co the thu lai thu cong sau: npx playwright install chromium" -ForegroundColor Yellow
+    Write-Host ""
+}
+else {
+    Write-Success "Da cai dat Chromium cho Playwright thanh cong!"
+}
+
+# ------------------------------------------------------------------------------
+# Buoc 5: Thiet lap Python Backend Virtualenv & Dependencies
+# ------------------------------------------------------------------------------
+Write-Step "Buoc 5/5: Thiet lap Python backend (virtualenv & requirements)..."
 
 $BackendDir = Join-Path $ProjectRoot "python-backend"
 $VenvDir = Join-Path $BackendDir "venv"
