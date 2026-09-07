@@ -51,10 +51,12 @@ flowchart TD
 ### 4. Server-Side Request Forgery (SSRF) Guard
 - In `/api/fetch-url`, user-provided URLs are parsed and inspected by `lib/ssrfGuard.js` (`assertPublicHost`).
 - Resolves DNS addresses and blocks private, loopback, link-local, and cloud metadata IP ranges (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `127.0.0.0/8`, `169.254.0.0/16`).
+- **Headless-render fallback (`lib/renderPage.js`)**: pages whose main content is hydrated client-side (e.g. `docln.sbs`) are re-fetched through a sandboxed headless Chromium instance so their JavaScript can run. The *same* `assertPublicHost` guard re-validates the initial navigation **and every subsequent sub-request the rendered page issues** (scripts, XHR/fetch, redirects) via Playwright's request routing, so page JavaScript cannot pivot into internal/private network resources. Image/media/font requests are dropped outright (perf + reduced SSRF surface); validated hostnames are memoized per render call. As with the plain-fetch path, full DNS-rebinding immunity would require socket-level IP pinning and is out of scope — see the equivalent note in `lib/ssrfGuard.js`.
 
 ### 5. Multi-Tier Rate Limiting
 - `server/middleware/rateLimiter.js` enforces request caps:
   - **AI Endpoints (`aiRateLimiter`)**: 30 requests/minute per IP for `/api/generate` and `/api/ocr` to prevent accidental loops or API quota exhaustion.
+  - **Web Extraction (`fetchUrlRateLimiter`)**: 15 requests/minute per IP for `/api/fetch-url`, tighter than the general AI tier because the headless-render fallback is meaningfully more expensive (CPU/memory) than a plain fetch.
   - **Global Endpoints (`globalRateLimiter`)**: 120 requests/minute across general endpoints.
 
 ### 6. Input Validation & Strict Typing

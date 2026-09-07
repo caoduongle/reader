@@ -7,8 +7,10 @@ import { JSDOM } from 'jsdom';
 
 // Security modules & middleware
 import { safeFetchHtml, SafeFetchError, htmlToParagraphText } from './lib/safeFetch.js';
+import { renderHtmlWithBrowser, RenderError } from './lib/renderPage.js';
 import {
   aiRateLimiter,
+  fetchUrlRateLimiter,
   globalRateLimiter,
 } from './server/middleware/rateLimiter.js';
 import { validateBody } from './server/middleware/validate.js';
@@ -20,6 +22,13 @@ import {
 import { sanitizeContent } from './server/lib/sanitizer.js';
 import { validateBase64Image } from './server/middleware/uploadGuard.js';
 import { errorHandler } from './server/middleware/errorHandler.js';
+import { findAdapter, extractWithAdapter } from './server/lib/siteAdapters.js';
+import { findNextChapterUrl } from './server/lib/nextChapter.js';
+
+// Minimum extracted-text length (characters) below which content is
+// considered "not enough" and the next fallback tier kicks in. Shared by
+// the adapter/Readability pass, the headless-render pass, and the AI pass.
+const MIN_CONTENT_LENGTH = 100;
 
 // Load environment variables
 dotenv.config();
@@ -146,9 +155,71 @@ app.post(
   }
 );
 
-// Web article extraction endpoint using Mozilla Readability with Gemini AI fallback
+/**
+ * Runs one extraction pass over an HTML string: parses it once with JSDOM,
+ * discovers the "next chapter" link *before* Readability gets a chance to
+ * mutate the document, then tries the site-adapter selectors and finally
+ * Readability for the article body itself.
+ *
+ * @param {string} html
+ * @param {string} finalUrl
+ * @param {object|null} adapter
+ * @returns {{ dom: JSDOM, extraction: object|null, nextChapterUrl: string|undefined }}
+ */
+function processHtml(html, finalUrl, adapter) {
+  const dom = new JSDOM(html, { url: finalUrl });
+  const document = dom.window.document;
+
+  // Must run before any extraction step, since Readability.parse() mutates
+  // the document it's given (removes scripts/"unlikely" nodes in place).
+  const nextChapterUrl = findNextChapterUrl(document, finalUrl, adapter);
+
+  let extraction = null;
+
+  // 1. Site-adapter selectors first — bypasses Readability's link-density
+  //    scoring, which can discard footnote- or ad-heavy chapter bodies.
+  const adapterResult = extractWithAdapter(document, adapter, MIN_CONTENT_LENGTH);
+  if (adapterResult) {
+    const formattedText = htmlToParagraphText(adapterResult.html, dom);
+    if (formattedText.length >= MIN_CONTENT_LENGTH) {
+      extraction = {
+        title: document.title || undefined,
+        content: formattedText,
+        sanitizedHtml: sanitizeContent(adapterResult.html),
+        byline: undefined,
+        siteName: undefined,
+      };
+    }
+  }
+
+  // 2. Generic Readability extraction (also acts as the fallback when an
+  //    adapter's selectors don't match, or there's no adapter at all).
+  if (!extraction) {
+    const reader = new Readability(document);
+    const article = reader.parse();
+    if (article && (article.content || article.textContent)) {
+      const formattedText = htmlToParagraphText(article.content || article.textContent, dom);
+      if (formattedText.length >= MIN_CONTENT_LENGTH) {
+        extraction = {
+          title: article.title,
+          content: formattedText,
+          sanitizedHtml: sanitizeContent(article.content || article.textContent),
+          byline: article.byline || undefined,
+          siteName: article.siteName || undefined,
+        };
+      }
+    }
+  }
+
+  return { dom, extraction, nextChapterUrl };
+}
+
+// Web article extraction endpoint: site adapters + Mozilla Readability,
+// escalating to a headless-browser render for JS-hydrated pages, with
+// Gemini AI as the last-resort fallback.
 app.post(
   '/api/fetch-url',
+  fetchUrlRateLimiter,
   validateBody(fetchUrlSchema),
   async (req, res, next) => {
     const { url } = req.body;
@@ -166,7 +237,7 @@ app.post(
       return next(err);
     }
 
-    const { html, finalUrl } = fetchResult;
+    let { html, finalUrl } = fetchResult;
     let parsedFinalUrl;
     try {
       parsedFinalUrl = new URL(finalUrl);
@@ -174,26 +245,56 @@ app.post(
       parsedFinalUrl = new URL(url);
     }
 
-    const dom = new JSDOM(html, { url: finalUrl });
-    const reader = new Readability(dom.window.document);
-    const article = reader.parse();
+    let adapter = findAdapter(parsedFinalUrl.hostname);
+    let { dom, extraction, nextChapterUrl } = processHtml(html, finalUrl, adapter);
+    let renderedWithBrowser = false;
 
-    let content = '';
-    let title = (article?.title || dom.window.document.title || 'Bài viết từ web').trim();
-    let sanitizedArticleContent = '';
-    let byline = article?.byline || undefined;
-    const siteName = article?.siteName || parsedFinalUrl.hostname;
+    // Escalate to a headless browser only when the fast static-fetch path
+    // wasn't enough — this keeps the common case (plain server-rendered
+    // articles/chapters) exactly as fast/light as before. Sites that hydrate
+    // their content client-side (e.g. docln.sbs) will always land here.
+    if (!extraction || extraction.content.length < MIN_CONTENT_LENGTH) {
+      try {
+        const rendered = await renderHtmlWithBrowser(finalUrl);
+        html = rendered.html;
+        finalUrl = rendered.finalUrl;
+        try {
+          parsedFinalUrl = new URL(finalUrl);
+        } catch {
+          // keep the previous parsedFinalUrl if the rendered URL is odd
+        }
+        adapter = findAdapter(parsedFinalUrl.hostname) || adapter;
 
-    if (article && (article.content || article.textContent)) {
-      const formattedText = htmlToParagraphText(article.content || article.textContent, dom);
-      if (formattedText.length >= 100) {
-        content = formattedText;
-        sanitizedArticleContent = sanitizeContent(article.content || article.textContent);
+        const renderedResult = processHtml(html, finalUrl, adapter);
+        dom = renderedResult.dom;
+        nextChapterUrl = renderedResult.nextChapterUrl || nextChapterUrl;
+        if (
+          renderedResult.extraction &&
+          renderedResult.extraction.content.length >= (extraction?.content.length || 0)
+        ) {
+          extraction = renderedResult.extraction;
+        }
+        renderedWithBrowser = true;
+      } catch (renderErr) {
+        // Playwright not installed, browser launch failed, navigation timed
+        // out, etc. — not fatal, we still have the static HTML to try the
+        // AI fallback against below.
+        const reason = renderErr instanceof RenderError ? renderErr.message : renderErr?.message || renderErr;
+        console.warn('[FetchUrl] Headless render fallback skipped/failed:', reason);
       }
     }
 
-    // AI Fallback via Gemini 2.5 Flash if Readability yields empty or < 100 characters
-    if (!content || content.length < 100) {
+    let content = extraction?.content || '';
+    let title = (extraction?.title || dom.window.document.title || 'Bài viết từ web').trim();
+    let sanitizedArticleContent = extraction?.sanitizedHtml || '';
+    let byline = extraction?.byline || undefined;
+    const siteName = extraction?.siteName || parsedFinalUrl.hostname;
+
+    // AI Fallback via Gemini 2.5 Flash if extraction yields empty or too little
+    // text. Runs against the best HTML we have — the headless-rendered
+    // version when we had to render, so a JS-hydrated page the AI still
+    // can't parse cleanly at least gets real content instead of an empty shell.
+    if (!content || content.length < MIN_CONTENT_LENGTH) {
       const rawKey = process.env.GEMINI_API_KEY;
       if (rawKey && rawKey.trim() !== '' && rawKey !== 'MY_GEMINI_API_KEY') {
         try {
@@ -214,7 +315,7 @@ ${html.slice(0, 200000)}`,
           });
 
           const aiText = (aiResponse.text || '').trim();
-          if (aiText.length >= 100) {
+          if (aiText.length >= MIN_CONTENT_LENGTH) {
             content = aiText;
             byline = 'AI Extracted';
             if (!title || title === 'Bài viết từ web') {
@@ -233,37 +334,12 @@ ${html.slice(0, 200000)}`,
       }
     }
 
-    if (!content || content.length < 100) {
+    if (!content || content.length < MIN_CONTENT_LENGTH) {
       return res.status(422).json({
         ok: false,
         error:
           'Không thể trích xuất nội dung bài đọc từ trang web này. Trang có thể yêu cầu đăng nhập hoặc chỉ chứa hình ảnh.',
       });
-    }
-
-    // Task 6 / US6: Scan for "Next Chapter" navigation link
-    let nextChapterUrl = undefined;
-    try {
-      const anchorElements = Array.from(dom.window.document.querySelectorAll('a[href]'));
-      const nextLinkRegex = /(?:chương\s*(?:sau|tiếp)|tiếp\s*theo|next\s*chapter|chap\s*sau)/i;
-      const nextLink = anchorElements.find(a => {
-        const text = a.textContent || '';
-        const titleAttr = a.getAttribute('title') || '';
-        const ariaLabel = a.getAttribute('aria-label') || '';
-        return nextLinkRegex.test(text) || nextLinkRegex.test(titleAttr) || nextLinkRegex.test(ariaLabel);
-      });
-
-      if (nextLink) {
-        const href = nextLink.getAttribute('href');
-        if (href && href.trim()) {
-          const resolved = new URL(href.trim(), finalUrl);
-          if (resolved.protocol === 'http:' || resolved.protocol === 'https:') {
-            nextChapterUrl = resolved.toString();
-          }
-        }
-      }
-    } catch {
-      // Ignore next chapter discovery errors
     }
 
     return res.json({
@@ -273,6 +349,7 @@ ${html.slice(0, 200000)}`,
       sanitizedHtml: sanitizedArticleContent,
       byline,
       siteName,
+      ...(renderedWithBrowser ? { renderedWithBrowser: true } : {}),
       ...(nextChapterUrl ? { nextChapterUrl } : {}),
     });
   }

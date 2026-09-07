@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import http from 'http';
 
-const { mockGenerateContent, mockLookup } = vi.hoisted(() => {
+const { mockGenerateContent, mockLookup, mockRenderHtmlWithBrowser } = vi.hoisted(() => {
   const mockGenerateContent = vi.fn();
   const mockLookup = vi.fn().mockImplementation(async (hostname: string, options?: { all?: boolean }) => {
     if (options && options.all) {
@@ -9,7 +9,13 @@ const { mockGenerateContent, mockLookup } = vi.hoisted(() => {
     }
     return { address: '93.184.216.34', family: 4 };
   });
-  return { mockGenerateContent, mockLookup };
+  // Defaults to "unavailable" so existing static-fetch scenarios are
+  // unaffected; individual tests override this to simulate a successful
+  // (or failed) headless render.
+  const mockRenderHtmlWithBrowser = vi
+    .fn()
+    .mockRejectedValue(new Error('Playwright not installed in test environment'));
+  return { mockGenerateContent, mockLookup, mockRenderHtmlWithBrowser };
 });
 
 vi.mock('@google/genai', () => {
@@ -34,6 +40,26 @@ vi.mock('dns/promises', async (importOriginal) => {
   };
 });
 
+// The headless-browser render fallback (lib/renderPage.js) is mocked at the
+// module boundary rather than actually launching Chromium: it's a heavy,
+// network-dependent optional dependency, and server.js only needs to know
+// "did the render succeed, and with what HTML" — exactly what this mock
+// simulates for the small number of tests that opt into it below.
+vi.mock('../../lib/renderPage', () => {
+  class RenderError extends Error {
+    status: number;
+    constructor(message: string, status = 502) {
+      super(message);
+      this.name = 'RenderError';
+      this.status = status;
+    }
+  }
+  return {
+    renderHtmlWithBrowser: mockRenderHtmlWithBrowser,
+    RenderError,
+  };
+});
+
 beforeEach(() => {
   mockLookup.mockImplementation(async (hostname: string, options?: { all?: boolean }) => {
     if (options && options.all) {
@@ -42,6 +68,9 @@ beforeEach(() => {
     return { address: '93.184.216.34', family: 4 };
   });
   mockLookup.mockClear();
+
+  mockRenderHtmlWithBrowser.mockReset();
+  mockRenderHtmlWithBrowser.mockRejectedValue(new Error('Playwright not installed in test environment'));
 });
 
 import app from '../../server';
@@ -948,6 +977,183 @@ describe('User Story 6: Next Chapter Navigation Link Discovery', () => {
       const body = await res.json();
       expect(body.ok).toBe(true);
       expect(body.nextChapterUrl).toBeUndefined();
+    } finally {
+      vi.stubGlobal('fetch', originalFetch);
+    }
+  });
+});
+
+describe('User Story 7: Headless-Browser Render Fallback for JS-Hydrated Pages', () => {
+  let server: http.Server;
+  let baseUrl: string;
+
+  beforeAll(async () => {
+    await new Promise<void>(resolve => {
+      server = app.listen(0, '127.0.0.1', () => {
+        const address = server.address();
+        if (address && typeof address === 'object') {
+          baseUrl = `http://127.0.0.1:${address.port}`;
+        }
+        resolve();
+      });
+    });
+  });
+
+  afterAll(async () => {
+    await new Promise<void>((resolve, reject) => {
+      server.close(err => (err ? reject(err) : resolve()));
+    });
+  });
+
+  it('escalates to a headless render when the static HTML shell has too little text, and reports renderedWithBrowser: true', async () => {
+    const shellHtml = `
+      <!DOCTYPE html>
+      <html>
+        <head><title>Đang tải...</title></head>
+        <body><div id="app"></div></body>
+      </html>
+    `;
+    const renderedHtml = `
+      <!DOCTYPE html>
+      <html>
+        <head><title>Chương 5 - Tiểu Thuyết SPA</title></head>
+        <body>
+          <article>
+            <h1>Chương 5: Khởi Đầu Mới</h1>
+            <p>Ánh nắng chiếu rọi qua khung cửa sổ, đánh thức nhân vật chính sau một giấc ngủ dài đầy mộng mị kỳ lạ.</p>
+            <p>Cậu ngồi dậy, nhìn ra ngoài trời và tự hỏi liệu cuộc phiêu lưu phía trước sẽ dẫn mình đến đâu.</p>
+          </article>
+        </body>
+      </html>
+    `;
+
+    const originalFetch = globalThis.fetch;
+    const mockFetch = vi.fn().mockImplementation(async (url: RequestInfo | URL, options?: RequestInit) => {
+      if (String(url) === 'https://spa-novel.test/chuong-5') {
+        return new Response(shellHtml, {
+          status: 200,
+          headers: { 'Content-Type': 'text/html; charset=utf-8' },
+        });
+      }
+      return originalFetch(url, options);
+    });
+    vi.stubGlobal('fetch', mockFetch);
+    mockRenderHtmlWithBrowser.mockResolvedValueOnce({
+      html: renderedHtml,
+      finalUrl: 'https://spa-novel.test/chuong-5',
+    });
+
+    try {
+      const res = await fetch(`${baseUrl}/api/fetch-url`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: 'https://spa-novel.test/chuong-5' }),
+      });
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.ok).toBe(true);
+      expect(body.renderedWithBrowser).toBe(true);
+      expect(body.content).toContain('Khởi Đầu Mới');
+      expect(mockRenderHtmlWithBrowser).toHaveBeenCalledWith('https://spa-novel.test/chuong-5');
+    } finally {
+      vi.stubGlobal('fetch', originalFetch);
+    }
+  });
+
+  it('applies the docln-hako adapter selector on rendered HTML so footnote-heavy chapter bodies are not lost to Readability', async () => {
+    const shellHtml = '<!DOCTYPE html><html><head><title>Đang tải...</title></head><body></body></html>';
+    // Mirrors the real-world shape: chapter text mixed with several inline
+    // footnote-reference links (high link density) plus an ad block sitting
+    // right next to it — exactly what can make generic Readability misfire.
+    const renderedHtml = `
+      <!DOCTYPE html>
+      <html>
+        <head><title>Chương 451 - Cổng Light Novel</title></head>
+        <body>
+          <div id="chapter-content">
+            <p>Đoạn văn đầu tiên của chương truyện <a href="#note1">[1]</a> chứa một chú thích dịch thuật ở cuối câu.</p>
+            <p>Đoạn văn thứ hai tiếp tục mạch truyện <a href="#note2">[2]</a> với một chú thích khác được đánh dấu.</p>
+            <p>Đoạn văn thứ ba khép lại chương này một cách trọn vẹn và đầy đủ ý nghĩa cho người đọc.</p>
+          </div>
+          <div class="ads">Quảng cáo không liên quan cần được loại bỏ khỏi nội dung chính.</div>
+        </body>
+      </html>
+    `;
+
+    const originalFetch = globalThis.fetch;
+    const mockFetch = vi.fn().mockImplementation(async (url: RequestInfo | URL, options?: RequestInit) => {
+      if (String(url) === 'https://docln.sbs/truyen/chuong-451') {
+        return new Response(shellHtml, {
+          status: 200,
+          headers: { 'Content-Type': 'text/html; charset=utf-8' },
+        });
+      }
+      return originalFetch(url, options);
+    });
+    vi.stubGlobal('fetch', mockFetch);
+    mockRenderHtmlWithBrowser.mockResolvedValueOnce({
+      html: renderedHtml,
+      finalUrl: 'https://docln.sbs/truyen/chuong-451',
+    });
+
+    try {
+      const res = await fetch(`${baseUrl}/api/fetch-url`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: 'https://docln.sbs/truyen/chuong-451' }),
+      });
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.ok).toBe(true);
+      expect(body.content).toContain('Đoạn văn đầu tiên');
+      expect(body.content).toContain('Đoạn văn thứ ba khép lại');
+      expect(body.content).not.toContain('Quảng cáo không liên quan');
+    } finally {
+      vi.stubGlobal('fetch', originalFetch);
+    }
+  });
+
+  it('never invokes the headless renderer when the static-fetch path already has enough content', async () => {
+    const richHtml = `
+      <!DOCTYPE html>
+      <html>
+        <head><title>Bài Báo Đầy Đủ</title></head>
+        <body>
+          <article>
+            <h1>Tin Tức Hôm Nay</h1>
+            <p>Đây là một bài báo có đầy đủ nội dung văn bản được render sẵn phía server, không cần trình duyệt ảo để đọc được.</p>
+            <p>Đoạn văn thứ hai tiếp tục cung cấp đủ thông tin chi tiết cho bạn đọc theo dõi trọn vẹn bài viết này.</p>
+          </article>
+        </body>
+      </html>
+    `;
+
+    const originalFetch = globalThis.fetch;
+    const mockFetch = vi.fn().mockImplementation(async (url: RequestInfo | URL, options?: RequestInit) => {
+      if (String(url) === 'https://static-news.test/article') {
+        return new Response(richHtml, {
+          status: 200,
+          headers: { 'Content-Type': 'text/html; charset=utf-8' },
+        });
+      }
+      return originalFetch(url, options);
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    try {
+      const res = await fetch(`${baseUrl}/api/fetch-url`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: 'https://static-news.test/article' }),
+      });
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.ok).toBe(true);
+      expect(body.renderedWithBrowser).toBeUndefined();
+      expect(mockRenderHtmlWithBrowser).not.toHaveBeenCalled();
     } finally {
       vi.stubGlobal('fetch', originalFetch);
     }
