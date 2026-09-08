@@ -1,0 +1,97 @@
+openapi: 3.0.3
+info:
+  title: VoxRead python-backend API (VieNeu-TTS)
+  version: "2.0.0"
+  description: >
+    Hợp đồng API sau khi bỏ RVC — python-backend chỉ còn phục vụ VieNeu-TTS.
+    Thay thế hoàn toàn contracts/rvc-server-api.yaml của specs/001-rvc-tts-desktop.
+servers:
+  - url: http://localhost:8008
+paths:
+  /speak:
+    post:
+      summary: Tổng hợp giọng nói bằng VieNeu-TTS
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text:
+                  type: string
+                  description: Văn bản cần đọc
+                voice:
+                  type: string
+                  description: Tên giọng dựng sẵn hoặc giọng đã nhân bản
+                  default: "Adam"
+      responses:
+        "200":
+          description: Audio WAV 48kHz
+          content:
+            audio/wav:
+              schema:
+                type: string
+                format: binary
+        "400":
+          description: Thiếu text hoặc voice không tồn tại
+        "503":
+          description: Model VieNeu chưa tải xong lần đầu
+  /health:
+    get:
+      summary: Trạng thái backend
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  vieneu_ready:
+                    type: boolean
+                    description: Model đã load vào RAM hay chưa (lazy-init)
+                  device:
+                    type: string
+                    enum: [cpu, cuda]
+  /voices/add:
+    post:
+      summary: Nhân bản giọng tức thì từ 1 clip audio tham chiếu (không train)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [name, audio]
+              properties:
+                name:
+                  type: string
+                  description: Tên giọng mới, hiển thị trong danh sách chọn
+                audio:
+                  type: string
+                  format: binary
+                  description: Clip tham chiếu 3-8 giây (wav/mp3/m4a)
+      responses:
+        "200":
+          description: Nhân bản thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  voiceName:
+                    type: string
+        "400":
+          description: Audio không hợp lệ hoặc quá ngắn/dài
+
+# Đã loại bỏ hoàn toàn so với contracts/rvc-server-api.yaml (spec 001):
+#   - GET  /model/list
+#   - POST /model/reload
+#   - POST /model/create-folder
+#   - Toàn bộ tham số RVC_PARAMS (pitch shift, index rate, protect, f0 method...)
