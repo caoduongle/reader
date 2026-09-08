@@ -1,13 +1,11 @@
 flask
-edge-tts
-rvc-python==0.1.5
+vieneu
 
-# LUU Y VE fairseq (Phu thuoc cua rvc-python):
-# Tren Windows, fairseq duoc cai dat truc tiep tu file wheel dong goi san trong
-# thu muc wheels/ (boi scripts/setup.ps1) TRUOC KHI chay requirements.txt nay,
-# nham tranh viec pip tai source tu PyPI va yeu cau Visual C++ Build Tools de build.
-# KHONG them fairseq vao day de tranh gay xung dot hoac kich hoat build tu source.
-
-# torch / torchaudio KHONG liet ke o day vi ban CUDA can khop voi GPU cua ban.
-# Cai theo huong dan rieng trong README.md (muc "Cai dat Python") TRUOC hoac
-# SAU khi chay `pip install -r requirements.txt` deu duoc.
+# Edge TTS da chuyen sang xu ly o server.js (Node) - xem
+# specs/048-desktop-tts-migration/research.md muc 2. Server Python nay chi
+# con phuc vu VieNeu-TTS.
+#
+# vieneu (v3 Turbo, mac dinh) chay ONNX Runtime tren CPU - KHONG can PyTorch.
+# Neu muon tang toc bang GPU cho van ban dai, cai them qua:
+#   pip install "vieneu[cuda]"
+# (tuy chon, khong bat buoc - khac voi RVC truoc day yeu cau PyTorch de chay duoc.)

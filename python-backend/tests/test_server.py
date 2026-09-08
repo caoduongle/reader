@@ -1,18 +1,21 @@
+"""Tests cho python-backend/server.py sau khi bo RVC (feature 048-desktop-tts-migration).
+
+Khong mock viec import `vieneu` (khac voi ban RVC cu can mock `rvc_python` vi thu
+vien do can binary C++ bien dich) - `pip install vieneu` la mot dependency binh
+thuong, import duoc ma khong can mang. Chi mock DOI TUONG tts (ket qua cua
+get_vieneu()) de test khong thuc su tai model tu Hugging Face Hub hay chay
+inference that.
+"""
+
+import io
+import json
 import os
 import sys
 from unittest.mock import MagicMock, patch
+
 import numpy as np
 import pytest
 
-# Ensure rvc_python is mocked if compiled C++ binaries are not present
-if "rvc_python" not in sys.modules:
-    mock_pkg = MagicMock()
-    mock_infer = MagicMock()
-    mock_pkg.infer = mock_infer
-    sys.modules["rvc_python"] = mock_pkg
-    sys.modules["rvc_python.infer"] = mock_infer
-
-# Add python-backend directory to sys.path
 BACKEND_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if BACKEND_DIR not in sys.path:
     sys.path.insert(0, BACKEND_DIR)
@@ -20,415 +23,286 @@ if BACKEND_DIR not in sys.path:
 import server  # noqa: E402
 
 
+def _make_mock_tts(preset_voices=None):
+    """Tao 1 doi tuong gia lap the cho Vieneu(), voi cac thuoc tinh/method ma
+    server.py thuc su dung: infer, save, add_voice, remove_voice, _preset_voices,
+    default_style."""
+    tts = MagicMock()
+    tts._preset_voices = preset_voices if preset_voices is not None else {
+        "Adam": {"description": "Giong nam mien Bac", "gender": "male"},
+    }
+    tts.default_style = "tu_nhien"
+    tts.infer.return_value = np.zeros(2400, dtype=np.float32)  # 0.1s @ 24kHz gia lap
+    tts.save.side_effect = lambda audio, path: open(path, "wb").write(b"RIFF....WAVEfake")
+    return tts
+
+
 @pytest.fixture
 def client():
     server.app.config["TESTING"] = True
-    with server.app.test_client() as client:
-        yield client
+    with server.app.test_client() as c:
+        yield c
 
 
 @pytest.fixture(autouse=True)
-def ensure_mock_rvc_when_empty():
-    """Ensure tests that require an active rvc instance have one even in CI."""
-    original_rvc = server.rvc
-    if server.rvc is None:
-        mock_rvc = MagicMock()
-        mock_rvc.current_model = "mock_model"
-        mock_rvc.models = {"mock_model": {"index": ""}}
-        mock_rvc.vc.tgt_sr = 40000
-        mock_rvc.f0up_key = 0
-        mock_rvc.f0method = "rmvpe"
-        mock_rvc.index_rate = 0.75
-        mock_rvc.filter_radius = 3
-        mock_rvc.resample_sr = 0
-        mock_rvc.rms_mix_rate = 0.25
-        mock_rvc.protect = 0.33
-        server.rvc = mock_rvc
+def reset_module_state():
+    """Cach ly moi test khoi state global (_vieneu, _vieneu_init_error) va don
+    USER_VOICES_JSON test co the tao ra."""
+    original_vieneu = server._vieneu
+    original_error = server._vieneu_init_error
     yield
-    server.rvc = original_rvc
+    server._vieneu = original_vieneu
+    server._vieneu_init_error = original_error
+    if os.path.exists(server.USER_VOICES_JSON):
+        os.remove(server.USER_VOICES_JSON)
 
 
-def test_health_endpoint_returns_ok(client):
-    """Verify GET /health returns HTTP 200 with status, model_loaded=True, and model_dir."""
+@pytest.fixture
+def mock_ready_tts():
+    """Gia lap truong hop VieNeu-TTS da khoi tao thanh cong."""
+    tts = _make_mock_tts()
+    server._vieneu = tts
+    server._vieneu_init_error = None
+    return tts
+
+
+# ============================================================
+#  /health
+# ============================================================
+
+def test_health_when_never_attempted_is_ok_but_not_ready(client):
+    """Truoc khi goi /speak lan nao, day la trang thai BINH THUONG (khac RVC cu
+    - VieNeu khong bat buoc nguoi dung phai co san model file truoc)."""
+    server._vieneu = None
+    server._vieneu_init_error = None
     response = client.get("/health")
     assert response.status_code == 200
-
     data = response.get_json()
-    assert data is not None
-    assert data.get("ok") is True
-    assert data.get("model_loaded") is True
-    assert "model_dir" in data
+    assert data["ok"] is True
+    assert data["vieneu_ready"] is False
+    assert "error" not in data
 
 
-def test_health_endpoint_when_no_model(client):
-    """Verify GET /health reports ok=False, reason=model_missing, model_loaded=False when rvc is None."""
-    with patch.object(server, "rvc", None), patch.object(server, "MODEL_PATH", None):
-        response = client.get("/health")
-        assert response.status_code == 200
-        data = response.get_json()
-        assert data["ok"] is False
-        assert data["reason"] == "model_missing"
-        assert data["model_loaded"] is False
-        assert "model_dir" in data
-        assert "error" in data
-        assert "device" in data
+def test_health_when_ready(client, mock_ready_tts):
+    response = client.get("/health")
+    data = response.get_json()
+    assert data["ok"] is True
+    assert data["vieneu_ready"] is True
 
 
-def test_health_endpoint_when_init_failed(client, tmp_path):
-    """Verify GET /health reports reason=model_init_failed and error details when model file exists but init failed."""
-    dummy_model = tmp_path / "corrupt.pth"
-    dummy_model.touch()
-    with patch.object(server, "rvc", None), \
-         patch.object(server, "MODEL_PATH", str(dummy_model)), \
-         patch.object(server, "last_init_error", "Lỗi khởi tạo model RVC: invalid checkpoint"):
-        response = client.get("/health")
-        assert response.status_code == 200
-        data = response.get_json()
-        assert data["ok"] is False
-        assert data["reason"] == "model_init_failed"
-        assert data["model_loaded"] is False
-        assert "invalid checkpoint" in data["error"]
+def test_health_when_init_failed_reports_friendly_network_error(client):
+    server._vieneu = None
+    server._vieneu_init_error = (
+        "huggingface_hub.errors.LocalEntryNotFoundError: check your internet connection"
+    )
+    response = client.get("/health")
+    data = response.get_json()
+    assert data["ok"] is False
+    assert data["vieneu_ready"] is False
+    assert "Internet" in data["error"]
 
 
-def test_detect_device_behavior():
-    """Verify detect_device chooses cuda:0 if available, cpu:0 if not, and respects VOXREAD_DEVICE override."""
-    with patch.dict(os.environ, {"VOXREAD_DEVICE": "cpu:0"}):
-        assert server.detect_device() == "cpu:0"
+# ============================================================
+#  POST /speak
+# ============================================================
 
-    with patch.dict(os.environ, {"VOXREAD_DEVICE": "cuda:1"}):
-        assert server.detect_device() == "cuda:1"
-
-    with patch.dict(os.environ, {"VOXREAD_DEVICE": ""}):
-        with patch("torch.cuda.is_available", return_value=True):
-            assert server.detect_device() == "cuda:0"
-        with patch("torch.cuda.is_available", return_value=False):
-            assert server.detect_device() == "cpu:0"
+def test_speak_missing_text_returns_400(client):
+    response = client.post("/speak", json={"text": ""})
+    assert response.status_code == 400
+    assert "text" in response.get_json()["error"].lower()
 
 
-
-
-def test_speak_endpoint_rejects_missing_text(client):
-    """Verify POST /speak returns HTTP 400 when body is empty or lacks text."""
-    response = client.post("/speak", json={})
+def test_speak_text_too_long_returns_400(client):
+    response = client.post("/speak", json={"text": "a" * (server.MAX_TEXT_LENGTH + 1)})
     assert response.status_code == 400
 
-    data = response.get_json()
-    assert data is not None
-    assert "error" in data
-    assert "Thieu 'text'" in data["error"]
 
-
-def test_speak_endpoint_rejects_whitespace_text(client):
-    """Verify POST /speak returns HTTP 400 when text consists solely of whitespace."""
-    response = client.post("/speak", json={"text": "   \n\t  "})
-    assert response.status_code == 400
-
-    data = response.get_json()
-    assert data is not None
-    assert "error" in data
-
-
-def test_speak_without_model_returns_503(client):
-    """Verify POST /speak returns HTTP 503 when no RVC model is loaded."""
-    with patch.object(server, "rvc", None), patch.object(server, "last_init_error", None):
-        response = client.post("/speak", json={"text": "Xin chào thế giới."})
+def test_speak_when_model_not_ready_returns_503(client):
+    with patch.object(server, "get_vieneu", side_effect=RuntimeError("network down")):
+        response = client.post("/speak", json={"text": "Xin chao"})
         assert response.status_code == 503
-
-        data = response.get_json()
-        assert data is not None
-        assert "error" in data
-        assert "python-backend/model/" in data["error"]
+        assert "error" in response.get_json()
 
 
-def test_speak_without_model_custom_error(client):
-    """Verify POST /speak returns custom initialization error in HTTP 503 response."""
-    custom_err = "Lỗi khởi tạo model RVC: corrupt weights"
-    with patch.object(server, "rvc", None), patch.object(server, "last_init_error", custom_err):
-        response = client.post("/speak", json={"text": "Xin chào thế giới."})
-        assert response.status_code == 503
-
-        data = response.get_json()
-        assert data is not None
-        assert data.get("error") == custom_err
-
-
-
-def test_speak_options_preflight_authorized_origin(client):
-    """Verify OPTIONS /speak with whitelisted Origin returns HTTP 204 and echoes Origin."""
-    response = client.options("/speak", headers={"Origin": "http://localhost:3000"})
-    assert response.status_code == 204
-    assert response.headers.get("Access-Control-Allow-Origin") == "http://localhost:3000"
-    assert "POST" in response.headers.get("Access-Control-Allow-Methods", "")
-
-
-def test_speak_options_preflight_unauthorized_origin(client):
-    """Verify OPTIONS /speak with untrusted Origin returns HTTP 204 without CORS headers."""
-    response = client.options("/speak", headers={"Origin": "https://trang-la.evil"})
-    assert response.status_code == 204
-    assert response.headers.get("Access-Control-Allow-Origin") is None
-
-
-def test_speak_options_preflight_chrome_extension_rejected(client):
-    """Verify OPTIONS /speak rejects chrome-extension:// origins (no CORS header returned)."""
-    response = client.options("/speak", headers={"Origin": "chrome-extension://abcdefghijklmnop"})
-    assert response.status_code == 204
-    assert response.headers.get("Access-Control-Allow-Origin") is None
-
-
-def test_speak_options_preflight_no_origin(client):
-    """Verify OPTIONS /speak with no Origin header returns HTTP 204 without CORS headers."""
-    response = client.options("/speak")
-    assert response.status_code == 204
-    assert response.headers.get("Access-Control-Allow-Origin") is None
-
-
-def test_speak_valid_request_returns_audio_wav(client):
-    """Verify POST /speak returns HTTP 200 with audio/wav mimetype on successful synthesis."""
-    dummy_audio_array = np.zeros(16000, dtype=np.int16)
-
-    async def mock_synth(text, out_path):
-        with open(out_path, "wb") as f:
-            f.write(b"dummy_base_audio")
-
-    if not hasattr(server.rvc, "models") or not isinstance(server.rvc.models, dict):
-        server.rvc.models = {server.rvc.current_model: {"index": ""}}
-    if not hasattr(server.rvc.vc, "tgt_sr") or not isinstance(server.rvc.vc.tgt_sr, int):
-        server.rvc.vc.tgt_sr = 40000
-
-    with patch.object(server, "_synthesize_base", side_effect=mock_synth), \
-         patch.object(server.rvc.vc, "vc_single", return_value=dummy_audio_array):
-        response = client.post("/speak", json={"text": "Hôm nay trời rất đẹp."})
+def test_speak_success_calls_infer_and_returns_wav_bytes(client, mock_ready_tts):
+    with patch.object(server, "get_vieneu", return_value=mock_ready_tts):
+        response = client.post("/speak", json={"text": "Xin chao VoxRead", "voice": "Adam"})
         assert response.status_code == 200
         assert response.mimetype == "audio/wav"
-        assert response.data[:4] == b"RIFF"
+        assert len(response.data) > 0
+        mock_ready_tts.infer.assert_called_once()
+        assert mock_ready_tts.infer.call_args.kwargs.get("voice") == "Adam"
 
 
-def test_speak_rvc_pipeline_error_returns_500_with_message(client):
-    """Verify POST /speak returns HTTP 500 with meaningful error when vc_single returns error tuple."""
-    async def mock_synth(text, out_path):
-        with open(out_path, "wb") as f:
-            f.write(b"dummy_base_audio")
+def test_speak_without_voice_omits_voice_kwarg(client, mock_ready_tts):
+    """Khi khong chon giong cu the, khong ep 'voice' de VieNeu tu dung default_voice."""
+    with patch.object(server, "get_vieneu", return_value=mock_ready_tts):
+        client.post("/speak", json={"text": "Xin chao"})
+        _, kwargs = mock_ready_tts.infer.call_args
+        assert "voice" not in kwargs
 
-    if not hasattr(server.rvc, "models") or not isinstance(server.rvc.models, dict):
-        server.rvc.models = {server.rvc.current_model: {"index": ""}}
 
-    error_tuple = ("Model architecture mismatch: expected 256 dimensions but got 768", (None, None))
+def test_speak_invalid_voice_name_maps_value_error_to_400(client, mock_ready_tts):
+    mock_ready_tts.infer.side_effect = ValueError("Voice 'khong-ton-tai' not found.")
+    with patch.object(server, "get_vieneu", return_value=mock_ready_tts):
+        response = client.post("/speak", json={"text": "Xin chao", "voice": "khong-ton-tai"})
+        assert response.status_code == 400
 
-    with patch.object(server, "_synthesize_base", side_effect=mock_synth), \
-         patch.object(server.rvc.vc, "vc_single", return_value=error_tuple):
-        response = client.post("/speak", json={"text": "Hôm nay trời rất đẹp."})
-        assert response.status_code == 500
+
+# ============================================================
+#  GET /voices
+# ============================================================
+
+def test_list_voices_when_not_ready_returns_503(client):
+    with patch.object(server, "get_vieneu", side_effect=RuntimeError("network down")):
+        response = client.get("/voices")
+        assert response.status_code == 503
+        assert response.get_json()["voices"] == []
+
+
+def test_list_voices_success(client, mock_ready_tts):
+    mock_ready_tts._preset_voices = {
+        "Adam": {"description": "Giong nam", "_user_voice": False},
+        "GiongCuaToi": {"description": "Giong da nhan ban", "_user_voice": True},
+    }
+    with patch.object(server, "get_vieneu", return_value=mock_ready_tts):
+        response = client.get("/voices")
         data = response.get_json()
-        assert data is not None
-        assert "Lỗi pipeline RVC: Model architecture mismatch" in data.get("error", "")
-        assert "has no attribute 'dtype'" not in data.get("error", "")
+        assert data["ok"] is True
+        ids = {v["id"] for v in data["voices"]}
+        assert ids == {"Adam", "GiongCuaToi"}
+        user_flags = {v["id"]: v["isUserVoice"] for v in data["voices"]}
+        assert user_flags["Adam"] is False
+        assert user_flags["GiongCuaToi"] is True
 
 
-def test_run_rvc_inference_raises_on_tuple(tmp_path):
-    """Verify _run_rvc_inference raises RuntimeError with actual message when vc_single returns tuple."""
-    base_file = tmp_path / "base.mp3"
-    base_file.write_bytes(b"dummy")
-    out_file = tmp_path / "out.wav"
+# ============================================================
+#  POST /voices/add  (thay the hoan toan viec train RVC qua Colab)
+# ============================================================
 
-    if not hasattr(server.rvc, "models") or not isinstance(server.rvc.models, dict):
-        server.rvc.models = {server.rvc.current_model: {"index": ""}}
-
-    error_tuple = ("Index file not found or corrupted", (None, None))
-
-    with patch.object(server.rvc.vc, "vc_single", return_value=error_tuple):
-        with pytest.raises(RuntimeError) as exc_info:
-            server._run_rvc_inference(str(base_file), str(out_file))
-        assert "Lỗi pipeline RVC: Index file not found or corrupted" in str(exc_info.value)
+def _wav_bytes(seconds: float, sr: int = 16000) -> bytes:
+    import soundfile as sf
+    buf = io.BytesIO()
+    sf.write(buf, np.zeros(int(seconds * sr), dtype=np.float32), sr, format="WAV")
+    return buf.getvalue()
 
 
-def test_run_rvc_inference_raises_on_empty_tuple(tmp_path):
-    """Verify _run_rvc_inference raises RuntimeError with fallback message when tuple has no detail."""
-    base_file = tmp_path / "base.mp3"
-    base_file.write_bytes(b"dummy")
-    out_file = tmp_path / "out.wav"
-
-    if not hasattr(server.rvc, "models") or not isinstance(server.rvc.models, dict):
-        server.rvc.models = {server.rvc.current_model: {"index": ""}}
-
-    with patch.object(server.rvc.vc, "vc_single", return_value=()):
-        with pytest.raises(RuntimeError) as exc_info:
-            server._run_rvc_inference(str(base_file), str(out_file))
-        assert "Lỗi pipeline RVC: Lỗi không xác định từ pipeline RVC" in str(exc_info.value)
+def test_add_voice_missing_name_returns_400(client):
+    response = client.post(
+        "/voices/add",
+        data={"audio": (io.BytesIO(_wav_bytes(5)), "clip.wav")},
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 400
+    assert "tên" in response.get_json()["error"].lower() or "ten" in response.get_json()["error"].lower()
 
 
-def test_discover_model_paths_sorting_and_discovery(tmp_path):
-    """Verify discover_model_paths correctly discovers and sorts .pth and .index files."""
-    model_dir = tmp_path / "model"
-    model_dir.mkdir()
-
-    # Create dummy files
-    (model_dir / ".gitkeep").touch()
-    (model_dir / "zebra_model.pth").touch()
-    (model_dir / "alpha_model.pth").touch()
-    (model_dir / "zeta.index").touch()
-    (model_dir / "beta.index").touch()
-
-    model_path, index_path = server.discover_model_paths(str(tmp_path))
-
-    assert model_path == str(model_dir / "alpha_model.pth")
-    assert index_path == str(model_dir / "beta.index")
+def test_add_voice_missing_audio_returns_400(client):
+    response = client.post("/voices/add", data={"name": "GiongCuaToi"}, content_type="multipart/form-data")
+    assert response.status_code == 400
 
 
-def test_discover_model_paths_no_model(tmp_path):
-    """Verify discover_model_paths returns (None, '') when directory has no .pth files."""
-    model_dir = tmp_path / "model"
-    model_dir.mkdir()
-    (model_dir / ".gitkeep").touch()
-
-    model_path, index_path = server.discover_model_paths(str(tmp_path))
-    assert model_path is None
-    assert index_path == ""
+def test_add_voice_bad_extension_returns_400(client):
+    response = client.post(
+        "/voices/add",
+        data={"name": "GiongCuaToi", "audio": (io.BytesIO(b"not audio"), "clip.txt")},
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 400
 
 
-def test_discover_model_paths_missing_dir(tmp_path):
-    """Verify discover_model_paths auto-creates model/ directory if it does not exist."""
-    nonexistent = tmp_path / "nonexistent"
-    model_path, index_path = server.discover_model_paths(str(nonexistent))
-    assert model_path is None
-    assert index_path == ""
-    assert (nonexistent / "model").is_dir()
+def test_add_voice_clip_too_short_returns_400(client, mock_ready_tts):
+    with patch.object(server, "get_vieneu", return_value=mock_ready_tts):
+        response = client.post(
+            "/voices/add",
+            data={"name": "GiongCuaToi", "audio": (io.BytesIO(_wav_bytes(1.0)), "clip.wav")},
+            content_type="multipart/form-data",
+        )
+        assert response.status_code == 400
+        assert "ngắn" in response.get_json()["error"] or "ngan" in response.get_json()["error"]
+        mock_ready_tts.add_voice.assert_not_called()
 
 
-def test_model_list_endpoint(client):
-    """Verify GET /model/list returns status 200 with model directory and file lists."""
-    response = client.get("/model/list")
-    assert response.status_code == 200
-    data = response.get_json()
-    assert data is not None
-    assert data.get("ok") is True
-    assert "model_dir" in data
-    assert "pth_files" in data
-    assert "index_files" in data
+def test_add_voice_clip_too_long_returns_400(client, mock_ready_tts):
+    with patch.object(server, "get_vieneu", return_value=mock_ready_tts):
+        response = client.post(
+            "/voices/add",
+            data={"name": "GiongCuaToi", "audio": (io.BytesIO(_wav_bytes(server.MAX_REF_CLIP_SECONDS + 5)), "clip.wav")},
+            content_type="multipart/form-data",
+        )
+        assert response.status_code == 400
+        mock_ready_tts.add_voice.assert_not_called()
 
 
-def test_model_create_folder_endpoint(client):
-    """Verify POST /model/create-folder idempotently creates model folder and returns path."""
-    response = client.post("/model/create-folder")
-    assert response.status_code == 200
-    data = response.get_json()
-    assert data is not None
-    assert data.get("ok") is True
-    assert "model_dir" in data
-    assert os.path.isdir(data["model_dir"])
+def test_add_voice_name_collides_with_builtin_preset_returns_400(client, mock_ready_tts):
+    mock_ready_tts._preset_voices = {"Adam": {"description": "Giong dung san"}}  # khong co _user_voice
+    with patch.object(server, "get_vieneu", return_value=mock_ready_tts):
+        response = client.post(
+            "/voices/add",
+            data={"name": "Adam", "audio": (io.BytesIO(_wav_bytes(5)), "clip.wav")},
+            content_type="multipart/form-data",
+        )
+        assert response.status_code == 400
+        mock_ready_tts.add_voice.assert_not_called()
 
 
-def test_model_reload_endpoint(client):
-    """Verify POST /model/reload triggers model reloading and returns health status."""
-    response = client.post("/model/reload")
-    assert response.status_code == 200
-    data = response.get_json()
-    assert data is not None
-    assert "ok" in data
-    assert "model_loaded" in data
-    assert "model_dir" in data
+def test_add_voice_success_calls_add_voice_and_persists(client, mock_ready_tts, tmp_path):
+    mock_ready_tts._preset_voices = {}
 
+    def fake_add_voice(name, ref_audio, **kwargs):
+        mock_ready_tts._preset_voices[name] = {
+            "description": kwargs.get("description", ""),
+            "speaker_emb": np.zeros(192, dtype=np.float32),
+            "codes": np.zeros(10, dtype=np.int64),
+        }
+        return name
 
-def test_torch_load_monkeypatch_defaults_weights_only_false():
-    """Verify torch.load monkeypatch injects weights_only=False by default."""
-    import torch
+    mock_ready_tts.add_voice.side_effect = fake_add_voice
 
-    assert torch.load == server._patched_torch_load
-
-    mock_orig = MagicMock(return_value="loaded_state")
-    with patch("server._original_torch_load", mock_orig):
-        res = torch.load("mock_model.pt", map_location="cpu")
-        assert res == "loaded_state"
-        mock_orig.assert_called_once_with("mock_model.pt", map_location="cpu", weights_only=False)
-
-
-def test_torch_load_monkeypatch_respects_explicit_weights_only():
-    """Verify torch.load monkeypatch respects explicit weights_only=True and weights_only=False."""
-    import torch
-
-    mock_orig = MagicMock(return_value="loaded_state")
-    with patch("server._original_torch_load", mock_orig):
-        # Case 1: Caller explicitly requests weights_only=True
-        res_true = torch.load("mock_model.pt", weights_only=True)
-        assert res_true == "loaded_state"
-        mock_orig.assert_called_with("mock_model.pt", weights_only=True)
-
-        # Case 2: Caller explicitly requests weights_only=False
-        res_false = torch.load("mock_model.pt", weights_only=False)
-        assert res_false == "loaded_state"
-        mock_orig.assert_called_with("mock_model.pt", weights_only=False)
-
-
-def test_speak_timing_log_emitted(client, capsys):
-    """Verify POST /speak prints timing telemetry with Edge-TTS, RVC inference, and text length."""
-    dummy_audio_array = np.zeros(16000, dtype=np.int16)
-
-    async def mock_synth(text, out_path):
-        with open(out_path, "wb") as f:
-            f.write(b"dummy_base_audio")
-
-    if not hasattr(server.rvc, "models") or not isinstance(server.rvc.models, dict):
-        server.rvc.models = {server.rvc.current_model: {"index": ""}}
-    if not hasattr(server.rvc.vc, "tgt_sr") or not isinstance(server.rvc.vc.tgt_sr, int):
-        server.rvc.vc.tgt_sr = 40000
-
-    sample_text = "Hôm nay trời rất đẹp."
-    with patch.object(server, "_synthesize_base", side_effect=mock_synth), \
-         patch.object(server.rvc.vc, "vc_single", return_value=dummy_audio_array):
-        response = client.post("/speak", json={"text": sample_text})
+    with patch.object(server, "get_vieneu", return_value=mock_ready_tts), \
+         patch.object(server, "VOICES_DIR", str(tmp_path)), \
+         patch.object(server, "USER_VOICES_JSON", str(tmp_path / "user_voices.json")):
+        response = client.post(
+            "/voices/add",
+            data={"name": "GiongCuaToi", "audio": (io.BytesIO(_wav_bytes(5)), "clip.wav")},
+            content_type="multipart/form-data",
+        )
         assert response.status_code == 200
+        data = response.get_json()
+        assert data["success"] is True
+        assert data["voiceName"] == "GiongCuaToi"
+        mock_ready_tts.add_voice.assert_called_once()
+        assert mock_ready_tts._preset_voices["GiongCuaToi"]["_user_voice"] is True
 
-        captured = capsys.readouterr()
-        assert "[VoxRead][Timing]" in captured.out
-        assert "Edge-TTS:" in captured.out
-        assert "RVC inference:" in captured.out
-        assert f"Text length: {len(sample_text)} ky tu" in captured.out
+        # Xac nhan da ghi ra file JSON rieng (khong dung tts.save_voices() cua thu vien)
+        assert (tmp_path / "user_voices.json").exists()
+        saved = json.loads((tmp_path / "user_voices.json").read_text(encoding="utf-8"))
+        assert "GiongCuaToi" in saved["voices"]
+        mock_ready_tts.save_voices.assert_not_called()
 
 
-def test_speak_wav_debug_log_emitted(client, capsys):
-    """Verify POST /speak prints WAV output debug telemetry with shape, dtype, sample_rate, and duration."""
-    dummy_audio_array = np.zeros(16000, dtype=np.int16)
+# ============================================================
+#  DELETE /voices/<name>
+# ============================================================
 
-    async def mock_synth(text, out_path):
-        with open(out_path, "wb") as f:
-            f.write(b"dummy_base_audio")
+def test_delete_voice_not_a_user_voice_returns_400(client, mock_ready_tts):
+    mock_ready_tts._preset_voices = {"Adam": {"description": "Giong dung san"}}
+    with patch.object(server, "get_vieneu", return_value=mock_ready_tts):
+        response = client.delete("/voices/Adam")
+        assert response.status_code == 400
+        mock_ready_tts.remove_voice.assert_not_called()
 
-    if not hasattr(server.rvc, "models") or not isinstance(server.rvc.models, dict):
-        server.rvc.models = {server.rvc.current_model: {"index": ""}}
-    if not hasattr(server.rvc.vc, "tgt_sr") or not isinstance(server.rvc.vc.tgt_sr, int):
-        server.rvc.vc.tgt_sr = 40000
 
-    sample_text = "Hôm nay trời rất đẹp."
-    with patch.object(server, "_synthesize_base", side_effect=mock_synth), \
-         patch.object(server.rvc.vc, "vc_single", return_value=dummy_audio_array):
-        response = client.post("/speak", json={"text": sample_text})
+def test_delete_voice_success(client, mock_ready_tts, tmp_path):
+    mock_ready_tts._preset_voices = {"GiongCuaToi": {"_user_voice": True}}
+    voices_json = tmp_path / "user_voices.json"
+    voices_json.write_text(json.dumps({"voices": {"GiongCuaToi": {"description": ""}}}), encoding="utf-8")
+
+    with patch.object(server, "get_vieneu", return_value=mock_ready_tts), \
+         patch.object(server, "USER_VOICES_JSON", str(voices_json)):
+        response = client.delete("/voices/GiongCuaToi")
         assert response.status_code == 200
-
-        captured = capsys.readouterr()
-        assert "[VoxRead][Debug] WAV output:" in captured.out
-        assert "shape=" in captured.out
-        assert "dtype=" in captured.out
-        assert "sample_rate=" in captured.out
-        assert "duration=" in captured.out
-
-
-def test_print_device_warning_on_cpu(capsys):
-    """Verify print_device_warning outputs warning and install guidance when device is cpu:0."""
-    server.print_device_warning("cpu:0")
-    captured = capsys.readouterr()
-    assert "[VoxRead][Canh bao] Dang chay tren CPU!" in captured.out
-    assert "[VoxRead][Goi y] Neu may co GPU NVIDIA, cai ban PyTorch CUDA bang lenh:" in captured.out
-    assert "pip uninstall torch torchaudio -y" in captured.out
-    assert "pip install torch==2.1.1+cu118 torchaudio==2.1.1+cu118 --index-url https://download.pytorch.org/whl/cu118" in captured.out
-
-
-def test_print_device_warning_on_cuda(capsys):
-    """Verify print_device_warning outputs nothing when device is cuda:0 or other CUDA devices."""
-    server.print_device_warning("cuda:0")
-    captured = capsys.readouterr()
-    assert captured.out == ""
-    assert captured.err == ""
-
-    server.print_device_warning("cuda:1")
-    captured = capsys.readouterr()
-    assert captured.out == ""
-    assert captured.err == ""
+        assert response.get_json()["success"] is True
+        mock_ready_tts.remove_voice.assert_called_once_with("GiongCuaToi")
+        remaining = json.loads(voices_json.read_text(encoding="utf-8"))
+        assert "GiongCuaToi" not in remaining["voices"]

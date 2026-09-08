@@ -1,268 +1,361 @@
 """
-Server TTS + RVC local cho ung dung VoxRead (Electron desktop).
+Server TTS cho ung dung VoxRead (Electron desktop).
 
-Pipeline:  text --(Edge-TTS)--> giong doc nen (mp3)  --(RVC)--> giong ca nhan (wav)
+Pipeline: text --(VieNeu-TTS)--> giong doc san / giong da nhan ban --> WAV
 
-App VoxRead Electron goi toi:
+App VoxRead Electron/renderer goi toi:
     POST http://localhost:8008/speak
-    body: { "text": "...", "language": "vi" }
+    body: { "text": "...", "voice": "Adam" }   (voice la tuy chon)
     -> tra ve RAW BYTES cua file WAV (audio/wav)
+
+Ke tu feature 048-desktop-tts-migration: da bo hoan toan pipeline RVC
+(rvc-python, fairseq, PyTorch bat buoc, quy trinh train qua Google Colab).
+Microsoft Edge TTS da chuyen sang xu ly o server.js (Node) - server nay
+KHONG con phuc vu Edge TTS nua. Xem specs/048-desktop-tts-migration/.
+
+Nhan ban giong (voice cloning) gio la "instant" - chi can 1 clip tham chieu
+3-8 giay, khong can train model rieng nhu RVC truoc day.
 """
 
-import asyncio
+import json
 import os
 import tempfile
 import threading
-import time
 import traceback
 
-import edge_tts
-import torch
-
-# --- Vá tuong thich PyTorch >= 2.6 cho fairseq (dependency cua rvc-python) ---
-# Tu PyTorch 2.6, torch.load() mac dinh weights_only=True, chan viec load cac checkpoint
-# cu (nhu hubert_base.pt) co chua object Python tuy bien (vd fairseq.data.dictionary.
-# Dictionary). fairseq da ngung cap nhat tu 2022 nen khong tu truyen weights_only=False.
-# hubert_base.pt / rmvpe.pt la file cong dong chuan, do chinh rvc_python tu tai ve tu
-# nguon chinh thuc, nen an toan de khoi phuc hanh vi torch.load cu cho rieng file nay.
-_original_torch_load = torch.load
-def _patched_torch_load(*args, **kwargs):
-    kwargs.setdefault("weights_only", False)
-    return _original_torch_load(*args, **kwargs)
-torch.load = _patched_torch_load
-# --- Het phan va ---
-
 from flask import Flask, request, Response, jsonify
-from rvc_python.infer import RVCInference
-from scipy.io import wavfile
+from vieneu import Vieneu
 
 # Thu muc chua chinh file server.py nay - dung lam goc cho moi duong dan ben duoi,
 # de du chay tu dau (terminal o thu muc khac, Task Scheduler, Startup...) van dung.
+# Giu nguyen quy uoc BASE_DIR-relative nhu ban RVC cu de tuong thich voi cach
+# Electron resolve duong dan packaged/dev (xem electron/main.ts getBackendPaths()).
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MODEL_DIR = os.path.join(BASE_DIR, "model")
-os.makedirs(MODEL_DIR, exist_ok=True)
 
-
-def discover_model_paths(base_dir: str):
-    """
-    Quet thu muc model/ ben trong base_dir:
-    - MODEL_PATH: file .pth dau tien theo thu tu abc (hoac None neu khong co)
-    - INDEX_PATH: file .index dau tien theo thu tu abc (hoac "" neu khong co)
-    Tu dong tao thu muc model/ neu chua ton tai.
-    """
-    model_dir = os.path.join(base_dir, "model")
-    os.makedirs(model_dir, exist_ok=True)
-
-    pth_files = sorted([f for f in os.listdir(model_dir) if f.endswith(".pth") and not f.startswith(".")])
-    index_files = sorted([f for f in os.listdir(model_dir) if f.endswith(".index") and not f.startswith(".")])
-
-    model_path = os.path.join(model_dir, pth_files[0]) if pth_files else None
-    index_path = os.path.join(model_dir, index_files[0]) if index_files else ""
-    return model_path, index_path
-
-
-# ============================================================
-#  CAU HINH
-# ============================================================
-
-# Tu dong tim model trong thu muc python-backend/model/
-MODEL_PATH, INDEX_PATH = discover_model_paths(BASE_DIR)
-
-# Giong TTS nen (Edge-TTS) — nen chon giong CUNG GIOI TINH voi giong ban train
-# de RVC phai bien doi it nhat, chat luong ra tot nhat.
-#   Nam: vi-VN-NamMinhNeural   |   Nu: vi-VN-HoaiMyNeural
-BASE_VOICE = "vi-VN-NamMinhNeural"
-
-# Dich giong (semitone). De 0 neu BASE_VOICE cung gioi tinh voi giong ban train.
-# +12 neu giong nen la Nam nhung giong dich la Nu, -12 neu nguoc lai.
-PITCH_SHIFT = 0
-
-
-def detect_device() -> str:
-    """
-    Tu dong detect GPU bang torch, khong can nguoi dung sua tay.
-    Cho phep override qua bien moi truong VOXREAD_DEVICE neu can.
-    """
-    override = os.environ.get("VOXREAD_DEVICE", "").strip()
-    if override:
-        return override
-    return "cuda:0" if torch.cuda.is_available() else "cpu:0"
-
-
-def print_device_warning(device: str) -> None:
-    """
-    In canh bao va huong dan cai dat neu he thong dang chay tren CPU.
-    """
-    if device == "cpu:0":
-        print("[VoxRead][Canh bao] Dang chay tren CPU! Toc do suy luan RVC se cham hon nhieu so voi GPU NVIDIA (15-25s/cau vs 1-3s/cau).")
-        print("[VoxRead][Goi y] Neu may co GPU NVIDIA, cai ban PyTorch CUDA bang lenh:")
-        print("       pip uninstall torch torchaudio -y")
-        print("       pip install torch==2.1.1+cu118 torchaudio==2.1.1+cu118 --index-url https://download.pytorch.org/whl/cu118")
-
-
-DEVICE = detect_device()
-print(f"[VoxRead] Dang dung thiet bi: {DEVICE}")
-print_device_warning(DEVICE)
+# Noi luu giong nguoi dung da nhan ban - thay the python-backend/model/*.pth/*.index cu.
+VOICES_DIR = os.path.join(BASE_DIR, "voices")
+USER_VOICES_JSON = os.path.join(VOICES_DIR, "user_voices.json")
+os.makedirs(VOICES_DIR, exist_ok=True)
 
 PORT = 8008
 
-# Cac tham so chat luong RVC — muc mac dinh da hop ly, it khi can doi.
-RVC_PARAMS = dict(
-    f0method="rmvpe",       # thuat toan nhan dien cao do, nhe va chinh xac nhat hien nay
-    f0up_key=PITCH_SHIFT,
-    index_rate=0.75,        # 0.7-0.85: giong net, it bi "lai" giong nen
-    filter_radius=3,
-    resample_sr=0,          # 0 = giu nguyen sample rate dau ra cua model
-    rms_mix_rate=0.25,
-    protect=0.33,           # bao ve phu am/hoi tho, tranh vo tieng
-)
+# Gioi han do dai van ban - giu nguyen gia tri cua ban RVC cu de khong doi hanh vi UX.
+MAX_TEXT_LENGTH = 10000
 
-# ============================================================
+# Do dai clip tham chieu de nhan ban giong. VieNeu khuyen nghi 3-8s; cho phep
+# roi rai hon mot chut nhung van chan file qua ngan (nhieu, khong du thong tin
+# giong noi) hoac qua dai (nguoi dung nham, ton thoi gian xu ly).
+MIN_REF_CLIP_SECONDS = 2.0
+MAX_REF_CLIP_SECONDS = 25.0
+
+ALLOWED_CLIP_EXTENSIONS = (".wav", ".mp3", ".m4a")
 
 app = Flask(__name__)
-rvc_lock = threading.Lock()  # tranh 2 request goi RVC cung luc (nhat la khi dung GPU)
 
-rvc = None
-last_init_error: str | None = None
+# vieneu khong cong bo cam ket thread-safety cho infer()/add_voice() khi goi dong
+# thoi. Giu 1 khoa toan cuc tuong tu ban RVC cu de an toan, dac biet vi kien truc
+# prefetch N+1/N+2 phia client (useTTS.ts) co the ban 2 request /speak song song.
+_vieneu_lock = threading.Lock()
+_vieneu = None
+_vieneu_init_error: str | None = None
 
 
-def reload_model():
+def get_vieneu():
+    """Khoi tao VieNeu-TTS lazy (chi khi co request dau tien can toi).
+
+    Lan dau se tai model tu Hugging Face Hub (can Internet), nhung dependency
+    mac dinh khong can PyTorch (chay ONNX Runtime tren CPU) - nhe hon nhieu so
+    voi RVC. Neu that bai (vd mat mang), loi duoc ghi vao _vieneu_init_error de
+    /health va /speak tra ve thong bao ro rang thay vi crash server hoac treo im.
     """
-    Quet lai thu muc model/ va khoi tao lai RVCInference.
-    Tra ve True neu load duoc model, False neu khong co model hoac gap loi.
-    """
-    global MODEL_PATH, INDEX_PATH, rvc, last_init_error
-    MODEL_PATH, INDEX_PATH = discover_model_paths(BASE_DIR)
-    if MODEL_PATH and os.path.isfile(MODEL_PATH):
+    global _vieneu, _vieneu_init_error
+    if _vieneu is not None:
+        return _vieneu
+    with _vieneu_lock:
+        if _vieneu is not None:  # double-checked locking
+            return _vieneu
+        print("[VoxRead] Dang khoi tao VieNeu-TTS (lan dau co the mat vai phut de tai model)...")
         try:
-            print(f"Dang tai model RVC tu: {MODEL_PATH} ... (lan dau se tu tai them hubert_base.pt + rmvpe.pt, ~200-300MB)")
-            new_rvc = RVCInference(
-                device=DEVICE,
-                model_path=MODEL_PATH,
-                index_path=INDEX_PATH,
-                version="v2",
-            )
-            new_rvc.set_params(**RVC_PARAMS)
-            rvc = new_rvc
-            last_init_error = None
-            print(f"Model san sang ({os.path.basename(MODEL_PATH)}). Server dang chay tai http://localhost:{PORT}  (giu cua so nay mo)")
-            return True
+            tts = Vieneu()  # mode="v3turbo" mac dinh: CPU/ONNX torch-free; tu dung GPU/PyTorch neu co
+            _load_user_voices(tts)
+            _vieneu = tts
+            _vieneu_init_error = None
+            print(f"[VoxRead] VieNeu-TTS san sang. Server dang chay tai http://localhost:{PORT}")
+            return _vieneu
         except Exception as e:
-            rvc = None
-            last_init_error = f"Lỗi khởi tạo model RVC ({os.path.basename(MODEL_PATH)}): {str(e)}"
-            print(f"[VoxRead] {last_init_error}")
-            return False
-    else:
-        rvc = None
-        last_init_error = "Chưa có model giọng RVC (.pth) trong thư mục python-backend/model."
-        print("[VoxRead] Canh bao: Chua co model giong RVC (.pth) trong thu muc python-backend/model/, tinh nang RVC se khong kha dung cho toi khi ban them model.")
-        return False
+            _vieneu_init_error = str(e)
+            print(f"[VoxRead][Loi] Khong the khoi tao VieNeu-TTS: {e}")
+            traceback.print_exc()
+            raise
 
 
-# Khoi tao model luc bat dau
-reload_model()
+def _friendly_init_error() -> str:
+    """Dich loi ky thuat (thuong la huggingface_hub khi mat mang) sang thong bao
+    de hieu cho nguoi dung cuoi."""
+    err = _vieneu_init_error or ""
+    network_markers = ("HTTPError", "Hub", "Connection", "internet", "Internet", "Forbidden", "resolve")
+    if any(marker in err for marker in network_markers):
+        return "Khong the tai model VieNeu-TTS (can Internet cho lan dau tien). Vui long kiem tra ket noi roi thu lai."
+    return err or "VieNeu-TTS chua san sang."
 
 
+# ============================================================
+#  Luu tru giong da nhan ban (thay the model/*.pth + *.index cua RVC)
+#
+#  Khac voi rvc-python (bat buoc train qua Colab, xem docs/rvc-voice-setup.md
+#  cu), VieNeu nhan ban tuc thi tu 1 clip tham chieu ngan qua tts.add_voice(),
+#  khong can train. Ham tts.save_voices() co san trong thu vien ghi de len file
+#  preset GOC nam trong site-packages (se mat khi nang cap thu vien - xem canh
+#  bao ngay trong docstring cua apps/user_voices.py trong chinh package vieneu).
+#  Vi vay ta tu luu 1 file JSON rieng ben ngoai (cung chien luoc voi
+#  apps/user_voices.py) roi nap chong len tts._preset_voices moi khi khoi dong.
+# ============================================================
 
-async def _synthesize_base(text: str, out_path: str):
-    """Goi Edge-TTS de tao giong doc nen. Luu y: Edge-TTS luon tra ve MP3
-    (audio-24khz-48kbitrate-mono-mp3) du duoi file la gi, nen ta dat ten
-    file dung la .mp3 cho ro rang; RVC (qua PyAV) tu doc duoc dinh dang nay."""
-    await edge_tts.Communicate(text, BASE_VOICE).save(out_path)
+def _load_user_voices(tts) -> int:
+    """Nap cac giong da nhan ban tu USER_VOICES_JSON vao tts._preset_voices.
+    Khong bao gio raise - file hong hoac thieu chi nghia la khong co giong nao
+    duoc nap (giong nhu khi chua tung nhan ban giong nao)."""
+    if not os.path.isfile(USER_VOICES_JSON):
+        return 0
+    try:
+        with open(USER_VOICES_JSON, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception as e:
+        print(f"[VoxRead][Canh bao] Khong doc duoc {USER_VOICES_JSON}: {e}")
+        return 0
+
+    import numpy as np
+    loaded = 0
+    for name, v in (data.get("voices") or {}).items():
+        emb = v.get("speaker_emb")
+        if emb is None:
+            continue
+        tts._preset_voices[name] = {
+            "description": v.get("description", "Giong da nhan ban"),
+            "gender": v.get("gender", ""),
+            "style": getattr(tts, "default_style", "tu_nhien"),
+            "speaker_emb": np.asarray(emb, dtype=np.float32),
+            "codes": np.asarray(v["codes"], dtype=np.int64) if v.get("codes") is not None else None,
+            "_user_voice": True,
+        }
+        loaded += 1
+    if loaded:
+        print(f"[VoxRead] Da nap {loaded} giong nguoi dung tu {USER_VOICES_JSON}")
+    return loaded
 
 
-def _run_rvc_inference(base_path: str, out_path: str):
-    """Chay RVC inference truc tiep qua rvc.vc.vc_single thay vi rvc.infer_file.
+def _persist_user_voice(tts, name: str) -> None:
+    """Ghi 1 giong (vua them qua tts.add_voice) vao USER_VOICES_JSON.
+    KHONG dung tts.save_voices() vi ham do ghi de file preset goc trong
+    site-packages cua thu vien (xem ghi chu o dau khoi nay)."""
+    entry = tts._preset_voices.get(name)
+    if entry is None:
+        raise ValueError(f"Khong tim thay giong '{name}' de luu.")
 
-    rvc-python==0.1.5 co bug: khi vc_single loi, no tra ve tuple (chuoi_loi, (None, None))
-    thay vi raise exception. infer_file khong check ma ghi thang vao wavfile.write(),
-    gay ra loi kho hieu "'tuple' object has no attribute 'dtype'" — che mat loi that su.
-    Ham nay bat dung tuple va raise RuntimeError voi noi dung loi that su.
-    """
-    if not rvc.current_model:
-        raise ValueError("Chưa tải model RVC.")
+    data = {"voices": {}}
+    if os.path.isfile(USER_VOICES_JSON):
+        try:
+            with open(USER_VOICES_JSON, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            data = {"voices": {}}
 
-    model_info = rvc.models[rvc.current_model]
-    file_index = model_info.get("index", "")
+    emb = entry.get("speaker_emb")
+    codes = entry.get("codes")
+    data.setdefault("voices", {})[name] = {
+        "description": entry.get("description", ""),
+        "gender": entry.get("gender", ""),
+        "speaker_emb": [round(float(x), 6) for x in emb.reshape(-1)] if emb is not None else None,
+        "codes": codes.astype(int).tolist() if codes is not None else None,
+    }
 
-    result = rvc.vc.vc_single(
-        sid=0,
-        input_audio_path=base_path,
-        f0_up_key=rvc.f0up_key,
-        f0_method=rvc.f0method,
-        file_index=file_index,
-        index_rate=rvc.index_rate,
-        filter_radius=rvc.filter_radius,
-        resample_sr=rvc.resample_sr,
-        rms_mix_rate=rvc.rms_mix_rate,
-        protect=rvc.protect,
-        f0_file="",
-        file_index2="",
-    )
+    os.makedirs(VOICES_DIR, exist_ok=True)
+    tmp_path = USER_VOICES_JSON + ".tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False)
+    os.replace(tmp_path, USER_VOICES_JSON)  # ghi nguyen tu, tranh file hong neu crash giua chung
 
-    if isinstance(result, tuple):
-        error_detail = result[0] if len(result) > 0 and result[0] else "Lỗi không xác định từ pipeline RVC"
-        raise RuntimeError(f"Lỗi pipeline RVC: {error_detail}")
 
-    print(f"[VoxRead][Debug] WAV output: shape={result.shape}, dtype={result.dtype}, "
-          f"sample_rate={rvc.vc.tgt_sr}, duration={len(result)/rvc.vc.tgt_sr:.2f}s")
+def _remove_persisted_user_voice(name: str) -> None:
+    if not os.path.isfile(USER_VOICES_JSON):
+        return
+    try:
+        with open(USER_VOICES_JSON, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if name in data.get("voices", {}):
+            del data["voices"][name]
+            with open(USER_VOICES_JSON, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False)
+    except Exception:
+        traceback.print_exc()
 
-    wavfile.write(out_path, rvc.vc.tgt_sr, result)
-    return out_path
 
+def list_all_voices(tts) -> list[dict]:
+    """Danh sach giong cho UI chon: ca giong dung san lan giong nguoi dung da nhan ban."""
+    voices = []
+    for name, v in tts._preset_voices.items():
+        if not isinstance(v, dict):
+            continue
+        voices.append({
+            "id": name,
+            "description": v.get("description", ""),
+            "isUserVoice": bool(v.get("_user_voice")),
+        })
+    return voices
+
+
+def _get_audio_duration_seconds(path: str) -> float | None:
+    """Doc do dai file audio (giay) bang soundfile - da la dependency co san cua
+    vieneu nen luon co san trong cung venv, khong can them thu vien moi."""
+    try:
+        import soundfile as sf
+        info = sf.info(path)
+        return info.frames / float(info.samplerate)
+    except Exception:
+        return None  # dinh dang khong doc duoc qua soundfile (vd .m4a tren mot so he thong) - bo qua kiem tra do dai
+
+
+# ============================================================
+#  Routes
+# ============================================================
 
 @app.route("/speak", methods=["POST", "OPTIONS"])
 def speak():
     if request.method == "OPTIONS":
         return Response(status=204)
 
-    if rvc is None:
-        error_msg = last_init_error or "Chưa có model giọng RVC (.pth) trong thư mục python-backend/model/. Vui lòng copy file .pth (và .index nếu có) vào thư mục python-backend/model/ rồi restart server."
-        return jsonify({
-            "error": error_msg
-        }), 503
-
     data = request.get_json(force=True, silent=True) or {}
     text = (data.get("text") or "").strip()
+    voice = (data.get("voice") or "").strip() or None
+
     if not text:
         return jsonify({"error": "Thieu 'text' trong request"}), 400
-
-    if len(text) > 10000:
-        return jsonify({"error": "Độ dài văn bản vượt quá giới hạn tối đa (10,000 ký tự)."}), 400
-
-    tmp_dir = tempfile.mkdtemp(prefix="tts_rvc_")
-    base_path = os.path.join(tmp_dir, "base.mp3")
-    out_path = os.path.join(tmp_dir, "out.wav")
+    if len(text) > MAX_TEXT_LENGTH:
+        return jsonify({"error": f"Do dai van ban vuot qua gioi han toi da ({MAX_TEXT_LENGTH} ky tu)."}), 400
 
     try:
-        t0 = time.time()
-        asyncio.run(_synthesize_base(text, base_path))
-        t1 = time.time()
+        tts = get_vieneu()
+    except Exception:
+        return jsonify({"error": _friendly_init_error()}), 503
 
-        with rvc_lock:
-            _run_rvc_inference(base_path, out_path)
-        t2 = time.time()
-
-        print(f"[VoxRead][Timing] Edge-TTS: {t1-t0:.2f}s | RVC inference: {t2-t1:.2f}s | "
-              f"Text length: {len(text)} ky tu")
+    tmp_dir = tempfile.mkdtemp(prefix="tts_vieneu_")
+    out_path = os.path.join(tmp_dir, "out.wav")
+    try:
+        with _vieneu_lock:
+            audio = tts.infer(text, voice=voice) if voice else tts.infer(text)
+            tts.save(audio, out_path)
 
         with open(out_path, "rb") as f:
             wav_bytes = f.read()
-
         return Response(wav_bytes, mimetype="audio/wav")
 
+    except ValueError as e:
+        # vd ten giong khong ton tai trong tts._preset_voices
+        return jsonify({"error": str(e)}), 400
     except Exception as e:
         traceback.print_exc()
-        return jsonify({"error": f"Đã xảy ra lỗi khi tổng hợp giọng nói: {str(e)}"}), 500
-
+        return jsonify({"error": f"Da xay ra loi khi tong hop giong noi: {str(e)}"}), 500
     finally:
-        for p in (base_path, out_path):
-            if os.path.exists(p):
-                os.remove(p)
+        if os.path.exists(out_path):
+            os.remove(out_path)
         try:
             os.rmdir(tmp_dir)
         except OSError:
             pass
+
+
+@app.route("/voices", methods=["GET"])
+def list_voices():
+    """Danh sach giong hien co (dung san + nguoi dung da nhan ban), cho SettingsModal."""
+    try:
+        tts = get_vieneu()
+    except Exception:
+        return jsonify({"ok": False, "error": _friendly_init_error(), "voices": []}), 503
+    return jsonify({"ok": True, "voices": list_all_voices(tts)})
+
+
+@app.route("/voices/add", methods=["POST", "OPTIONS"])
+def add_voice():
+    """Nhan ban giong tuc thi tu 1 clip tham chieu 3-8 giay - KHONG can train.
+    Thay the hoan toan quy trinh train RVC qua Google Colab (docs/rvc-voice-setup.md cu)."""
+    if request.method == "OPTIONS":
+        return Response(status=204)
+
+    name = (request.form.get("name") or "").strip()
+    if not name:
+        return jsonify({"error": "Hay dat ten cho giong."}), 400
+    if len(name) > 40:
+        return jsonify({"error": "Ten giong toi da 40 ky tu."}), 400
+    if "—" in name or "/" in name or "\\" in name:
+        return jsonify({"error": "Ten giong khong duoc chua ky tu / \\ —."}), 400
+
+    audio_file = request.files.get("audio")
+    if audio_file is None or not audio_file.filename:
+        return jsonify({"error": "Hay tai len file audio mau (3-8 giay)."}), 400
+
+    suffix = os.path.splitext(audio_file.filename)[1].lower()
+    if suffix not in ALLOWED_CLIP_EXTENSIONS:
+        return jsonify({"error": f"Chi ho tro file {', '.join(ALLOWED_CLIP_EXTENSIONS)}."}), 400
+
+    try:
+        tts = get_vieneu()
+    except Exception:
+        return jsonify({"error": _friendly_init_error()}), 503
+
+    existing = tts._preset_voices.get(name)
+    if existing is not None and not existing.get("_user_voice"):
+        return jsonify({"error": f"'{name}' la giong dung san cua VieNeu, hay chon ten khac."}), 400
+
+    tmp_dir = tempfile.mkdtemp(prefix="voice_clone_")
+    clip_path = os.path.join(tmp_dir, f"ref{suffix}")
+    audio_file.save(clip_path)
+
+    try:
+        duration = _get_audio_duration_seconds(clip_path)
+        if duration is not None and duration < MIN_REF_CLIP_SECONDS:
+            return jsonify({"error": f"Clip qua ngan ({duration:.1f}s). Can toi thieu {MIN_REF_CLIP_SECONDS:.0f} giay."}), 400
+        if duration is not None and duration > MAX_REF_CLIP_SECONDS:
+            return jsonify({"error": f"Clip qua dai ({duration:.1f}s). Toi da {MAX_REF_CLIP_SECONDS:.0f} giay."}), 400
+
+        with _vieneu_lock:
+            tts.add_voice(name, clip_path, denoise=True, description="Giong da nhan ban")
+            tts._preset_voices[name]["_user_voice"] = True
+            _persist_user_voice(tts, name)
+
+        return jsonify({"success": True, "voiceName": name})
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"success": False, "error": f"Khong the nhan ban giong: {str(e)}"}), 500
+    finally:
+        if os.path.exists(clip_path):
+            os.remove(clip_path)
+        try:
+            os.rmdir(tmp_dir)
+        except OSError:
+            pass
+
+
+@app.route("/voices/<name>", methods=["DELETE", "OPTIONS"])
+def delete_voice(name: str):
+    """Xoa 1 giong da nhan ban. Khong the xoa giong dung san cua VieNeu."""
+    if request.method == "OPTIONS":
+        return Response(status=204)
+
+    try:
+        tts = get_vieneu()
+    except Exception:
+        return jsonify({"error": _friendly_init_error()}), 503
+
+    entry = tts._preset_voices.get(name)
+    if entry is None or not entry.get("_user_voice"):
+        return jsonify({"error": "Chi xoa duoc giong do ban tu nhan ban."}), 400
+
+    with _vieneu_lock:
+        tts.remove_voice(name)
+        _remove_persisted_user_voice(name)
+
+    return jsonify({"success": True})
 
 
 @app.after_request
@@ -271,7 +364,7 @@ def _add_cors_headers(resp):
     allowed_origins = {"http://localhost:3000", "http://127.0.0.1:3000", "null"}
     if origin and origin in allowed_origins:
         resp.headers["Access-Control-Allow-Origin"] = origin
-        resp.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+        resp.headers["Access-Control-Allow-Methods"] = "GET, POST, DELETE, OPTIONS"
         resp.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     resp.headers["X-Content-Type-Options"] = "nosniff"
     resp.headers["X-Frame-Options"] = "DENY"
@@ -280,79 +373,22 @@ def _add_cors_headers(resp):
 
 @app.route("/health", methods=["GET"])
 def health():
-    model_dir = os.path.join(BASE_DIR, "model")
-    model_loaded = rvc is not None and getattr(rvc, "current_model", None) is not None
-    if model_loaded:
+    """Bao cao trang thai server. Khac voi ban RVC cu (bat buoc co model.pth
+    truoc khi dung duoc), VieNeu luon co san giong dung san ngay khi model tai
+    xong lan dau - vi vay 'chua tung goi /speak lan nao' la trang thai BINH
+    THUONG (ok=True, vieneu_ready=False), khac voi 'da thu tai nhung that bai'
+    (ok=False, kem error ro rang)."""
+    if _vieneu is not None:
+        return jsonify({"ok": True, "vieneu_ready": True, "voices_dir": VOICES_DIR})
+    if _vieneu_init_error is not None:
         return jsonify({
-            "ok": True,
-            "model_loaded": True,
-            "model_name": os.path.basename(MODEL_PATH) if MODEL_PATH else None,
-            "index_name": os.path.basename(INDEX_PATH) if INDEX_PATH else None,
-            "model_dir": model_dir,
-            "device": DEVICE,
+            "ok": False,
+            "vieneu_ready": False,
+            "error": _friendly_init_error(),
+            "voices_dir": VOICES_DIR,
         })
-    reason = "model_init_failed" if (MODEL_PATH and os.path.isfile(MODEL_PATH)) else "model_missing"
-    return jsonify({
-        "ok": False,
-        "reason": reason,
-        "model_loaded": False,
-        "model_dir": model_dir,
-        "error": last_init_error or "Chưa có file model (.pth) trong thư mục python-backend/model.",
-        "device": DEVICE,
-    })
-
-
-@app.route("/model/list", methods=["GET"])
-def model_list():
-    model_dir = os.path.join(BASE_DIR, "model")
-    os.makedirs(model_dir, exist_ok=True)
-    pth_files = sorted([f for f in os.listdir(model_dir) if f.endswith(".pth") and not f.startswith(".")])
-    index_files = sorted([f for f in os.listdir(model_dir) if f.endswith(".index") and not f.startswith(".")])
-    return jsonify({
-        "ok": True,
-        "model_dir": model_dir,
-        "active_model": os.path.basename(MODEL_PATH) if MODEL_PATH else None,
-        "active_index": os.path.basename(INDEX_PATH) if INDEX_PATH else None,
-        "pth_files": pth_files,
-        "index_files": index_files,
-    })
-
-
-@app.route("/model/reload", methods=["POST"])
-def model_reload():
-    with rvc_lock:
-        success = reload_model()
-    model_dir = os.path.join(BASE_DIR, "model")
-    if success and rvc is not None:
-        return jsonify({
-            "ok": True,
-            "model_loaded": True,
-            "model_name": os.path.basename(MODEL_PATH) if MODEL_PATH else None,
-            "index_name": os.path.basename(INDEX_PATH) if INDEX_PATH else None,
-            "model_dir": model_dir,
-            "device": DEVICE,
-        })
-    reason = "model_init_failed" if (MODEL_PATH and os.path.isfile(MODEL_PATH)) else "model_missing"
-    return jsonify({
-        "ok": False,
-        "reason": reason,
-        "model_loaded": False,
-        "model_dir": model_dir,
-        "error": last_init_error or "Chưa có file model (.pth) trong thư mục python-backend/model.",
-        "device": DEVICE,
-    })
-
-
-@app.route("/model/create-folder", methods=["POST"])
-def model_create_folder():
-    model_dir = os.path.join(BASE_DIR, "model")
-    os.makedirs(model_dir, exist_ok=True)
-    return jsonify({
-        "ok": True,
-        "model_dir": model_dir,
-    })
+    return jsonify({"ok": True, "vieneu_ready": False, "voices_dir": VOICES_DIR})
 
 
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=PORT, threaded=True)
-
