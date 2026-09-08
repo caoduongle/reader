@@ -68,3 +68,22 @@ export const ocrSchema = z
   })
   .strict();
 
+/**
+ * Validation schema for /api/speak/edge (Microsoft Edge TTS)
+ * Feature 048-desktop-tts-migration: thay thế pipeline RVC, giọng Edge TTS
+ * giờ được tổng hợp trực tiếp tại đây (Node) thay vì qua python-backend.
+ */
+export const speakEdgeSchema = z
+  .object({
+    text: z
+      .string({ required_error: 'Thiếu "text" trong request.' })
+      .trim()
+      .min(1, 'Thiếu "text" trong request.')
+      .max(10_000, 'Độ dài văn bản vượt quá giới hạn tối đa (10,000 ký tự).'),
+    voice: z.string().trim().max(100).optional().default('vi-VN-HoaiMyNeural'),
+    rate: z.string().trim().max(20).optional().default('+0%'),
+    pitch: z.string().trim().max(20).optional().default('+0Hz'),
+    volume: z.string().trim().max(20).optional().default('+0%'),
+  })
+  .strict();
+

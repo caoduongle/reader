@@ -4,6 +4,11 @@ import helmet from 'helmet';
 import { GoogleGenAI } from '@google/genai';
 import { Readability } from '@mozilla/readability';
 import { JSDOM } from 'jsdom';
+import { EdgeTTS } from 'node-edge-tts';
+import { randomUUID } from 'node:crypto';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 
 // Security modules & middleware
 import { safeFetchHtml, SafeFetchError, htmlToParagraphText } from './lib/safeFetch.js';
@@ -18,6 +23,7 @@ import {
   generateSchema,
   fetchUrlSchema,
   ocrSchema,
+  speakEdgeSchema,
 } from './server/validators/apiSchemas.js';
 import { sanitizeContent } from './server/lib/sanitizer.js';
 import { validateBase64Image } from './server/middleware/uploadGuard.js';
@@ -118,6 +124,44 @@ app.get('/health', (req, res) => {
     timestamp: new Date().toISOString(),
   });
 });
+
+// Microsoft Edge TTS - tổng hợp giọng nói trực tiếp (feature 048-desktop-tts-migration).
+// Đặt ở đây (Node) thay vì python-backend vì server.js đã bắt buộc chạy toàn thời
+// gian cho /api/ocr + /api/fetch-url (không đổi trong phạm vi migration này) - thêm
+// route vào đây không sinh thêm tiến trình nào. python-backend giờ chỉ còn phục vụ
+// VieNeu-TTS. Xem specs/048-desktop-tts-migration/research.md mục 2 và
+// contracts/edge-tts-route-contract.md.
+app.post(
+  '/api/speak/edge',
+  validateBody(speakEdgeSchema),
+  async (req, res, next) => {
+    const { text, voice, rate, pitch, volume } = req.body;
+
+    let tmpDir;
+    try {
+      tmpDir = await mkdtemp(path.join(tmpdir(), 'voxread-edge-tts-'));
+      const outPath = path.join(tmpDir, `${randomUUID()}.mp3`);
+
+      const tts = new EdgeTTS({ voice, rate, pitch, volume, timeout: 15000 });
+      await tts.ttsPromise(text, outPath);
+
+      const audioBuffer = await readFile(outPath);
+      res.set('Content-Type', 'audio/mpeg');
+      return res.send(audioBuffer);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const wrapped = new Error(
+        `Không thể tạo giọng đọc Edge TTS (dịch vụ của Microsoft có thể đang gián đoạn, hoặc thiếu kết nối Internet): ${message}`
+      );
+      wrapped.status = 502;
+      next(wrapped);
+    } finally {
+      if (tmpDir) {
+        await rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+      }
+    }
+  }
+);
 
 // Secure proxy generation endpoint (FR-006, FR-011, FR-014)
 app.post(
