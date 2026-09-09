@@ -54,8 +54,8 @@ describe('useTTS hook race condition guards & loaded audio index', () => {
     localStorage.setItem(
       'voxread_tts_settings_v1',
       JSON.stringify({
-        ttsProvider: 'rvc-local',
-        rvcServerUrl: 'http://localhost:8008',
+        ttsProvider: 'vieneu-tts',
+        vieneuServerUrl: 'http://localhost:8008',
       })
     );
   });
@@ -756,7 +756,7 @@ describe('useTTS hook race condition guards & loaded audio index', () => {
 
       // Warning logged
       expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('[VoxRead] Retry fetch RVC speech sau lỗi')
+        expect.stringContaining('[VoxRead] Retry fetch vieneu-tts speech sau lỗi')
       );
     });
 

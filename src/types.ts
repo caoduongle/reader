@@ -19,9 +19,13 @@ export interface TTSVoiceOption {
   displayName: string;
 }
 
-export type TTSProvider = 'browser' | 'rvc-local';
+// Feature 048-desktop-tts-migration: bo RVC, chuyen sang 3 engine.
+// 'browser'    -> Web Speech API, chay hoan toan client-side, khong can backend.
+// 'edge-tts'   -> Microsoft Edge TTS, xu ly qua server.js (Node), can Internet.
+// 'vieneu-tts' -> VieNeu-TTS, xu ly qua python-backend, chay offline sau lan tai model dau.
+export type TTSProvider = 'browser' | 'edge-tts' | 'vieneu-tts';
 
-export type RVCServerStatus =
+export type TTSServerStatus =
   | 'unknown'
   | 'checking'
   | 'connected'
@@ -31,7 +35,14 @@ export type RVCServerStatus =
 
 export interface TTSSettings {
   ttsProvider: TTSProvider;
-  rvcServerUrl: string;
+  /** Endpoint cua server.js - phuc vu engine 'edge-tts'. Mac dinh http://localhost:3001 */
+  edgeTtsProxyUrl: string;
+  /** Giong Edge TTS dang chon, vd 'vi-VN-HoaiMyNeural' */
+  edgeVoiceId: string;
+  /** Endpoint cua python-backend - phuc vu engine 'vieneu-tts'. Mac dinh http://localhost:8008 */
+  vieneuServerUrl: string;
+  /** Giong VieNeu-TTS dang chon: mot preset dung san (vd 'Adam') hoac ten giong da nhan ban */
+  vieneuVoiceId: string;
   voiceURI: string;
   rate: number; // 0.5 to 3.0
   pitch: number; // 0.5 to 2.0
@@ -166,25 +177,29 @@ export interface ScreenReaderBridge {
   removeClipboardListener: () => void;
 }
 
-export interface ModelImportResult {
+/**
+ * Ket qua tra ve tu POST {vieneuServerUrl}/voices/add.
+ * Khac voi ModelImportResult cua RVC truoc day (chon file .pth/.index roi copy
+ * qua Electron IPC), viec nhan ban giong VieNeu duoc renderer goi truc tiep qua
+ * fetch()/FormData toi python-backend - giong het cach fileParser.ts doc file
+ * TXT/EPUB/PDF, khong can them IPC bridge rieng cho buoc upload.
+ */
+export interface VoiceCloneResult {
   success: boolean;
-  canceled?: boolean;
-  importedFiles?: string[];
-  targetDir?: string;
+  voiceName?: string;
   error?: string;
 }
 
-export interface DesktopModelsBridge {
-  getDir: () => Promise<string>;
-  openFolder: () => Promise<{ success: boolean; error?: string }>;
-  importModel: () => Promise<ModelImportResult>;
+export interface VoiceCloneBridge {
+  /** Mo thu muc chua giong da nhan ban (python-backend/voices/) trong file explorer. */
+  openVoicesFolder: () => Promise<{ success: boolean; error?: string }>;
 }
 
 export interface VoxReadDesktopBridge {
   isDesktop: boolean;
   platform: string;
   screenReader?: ScreenReaderBridge;
-  models?: DesktopModelsBridge;
+  voiceClone?: VoiceCloneBridge;
 }
 
 declare global {

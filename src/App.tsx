@@ -206,9 +206,9 @@ export default function App() {
     prevSentence,
     jumpToSentence,
     testVoice,
-    rvcServerStatus,
+    ttsServerStatus,
     serverErrorMessage,
-    checkRVCServerHealth,
+    checkTTSServerHealth,
   } = useTTS(
     currentSentences,
     sentenceIdx => {
@@ -667,9 +667,9 @@ export default function App() {
             onClose={() => setIsSettingsOpen(false)}
             settings={settings}
             voices={voices}
-            rvcServerStatus={rvcServerStatus}
+            ttsServerStatus={ttsServerStatus}
             serverErrorMessage={serverErrorMessage}
-            onCheckRVCHealth={checkRVCServerHealth}
+            onCheckTTSHealth={checkTTSServerHealth}
             onSaveSettings={(newSettings: TTSSettings) => {
               updateSettings(newSettings);
               showToast('Settings saved');

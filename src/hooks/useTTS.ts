@@ -1,9 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { TTSVoiceOption, TTSSettings, SentenceItem, RVCServerStatus } from '../types';
+import { TTSVoiceOption, TTSSettings, SentenceItem, TTSServerStatus, TTSProvider } from '../types';
 
 export const DEFAULT_SETTINGS: TTSSettings = {
   ttsProvider: 'browser',
-  rvcServerUrl: 'http://localhost:8008',
+  edgeTtsProxyUrl: 'http://localhost:3001',
+  edgeVoiceId: 'vi-VN-HoaiMyNeural',
+  vieneuServerUrl: 'http://localhost:8008',
+  vieneuVoiceId: '',
   voiceURI: '',
   rate: 1.0,
   pitch: 1.0,
@@ -26,7 +29,18 @@ export const DEFAULT_SETTINGS: TTSSettings = {
 
 const SETTINGS_STORAGE_KEY = 'voxread_tts_settings_v1';
 const MAX_PREFETCH_AHEAD = 2; // Prefetch next 2 sentences (N+1, N+2)
-const RVC_FETCH_TIMEOUT_MS = 20000; // 20s timeout for RVC speech synthesis
+const SERVER_FETCH_TIMEOUT_MS = 20000; // 20s timeout for server-side TTS synthesis (edge-tts / vieneu-tts)
+
+// Feature 048-desktop-tts-migration: 'rvc-local' khong con la gia tri hop le cua
+// TTSProvider. Nguoi dung nang cap tu ban cu co the co gia tri nay trong
+// localStorage - fallback an toan ve 'browser' (Web Speech, luon hoat dong, 0
+// setup) thay vi de ung dung goi nham mot route khong con ton tai.
+function migrateLegacyProvider(value: unknown): TTSProvider {
+  if (value === 'browser' || value === 'edge-tts' || value === 'vieneu-tts') {
+    return value;
+  }
+  return 'browser';
+}
 
 interface CacheEntry {
   blobUrl: string;
@@ -52,8 +66,11 @@ export function useTTS(
         return {
           ...DEFAULT_SETTINGS,
           ...parsed,
-          ttsProvider: parsed.ttsProvider || 'browser',
-          rvcServerUrl: parsed.rvcServerUrl || 'http://localhost:8008',
+          ttsProvider: migrateLegacyProvider(parsed.ttsProvider),
+          edgeTtsProxyUrl: parsed.edgeTtsProxyUrl || DEFAULT_SETTINGS.edgeTtsProxyUrl,
+          edgeVoiceId: parsed.edgeVoiceId || DEFAULT_SETTINGS.edgeVoiceId,
+          vieneuServerUrl: parsed.vieneuServerUrl || DEFAULT_SETTINGS.vieneuServerUrl,
+          vieneuVoiceId: parsed.vieneuVoiceId || DEFAULT_SETTINGS.vieneuVoiceId,
         };
       }
     } catch {
@@ -67,7 +84,7 @@ export function useTTS(
   const [isBuffering, setIsBuffering] = useState<boolean>(false);
   const [currentSentenceIndex, setCurrentSentenceIndex] = useState<number>(0);
   const [currentWordCharIndex, setCurrentWordCharIndex] = useState<number | null>(null);
-  const [rvcServerStatus, setRvcServerStatus] = useState<RVCServerStatus>('unknown');
+  const [ttsServerStatus, setTtsServerStatus] = useState<TTSServerStatus>('unknown');
   const [serverErrorMessage, setServerErrorMessage] = useState<string | null>(null);
 
   // Keep references to avoid stale closures in event listeners
@@ -89,7 +106,7 @@ export function useTTS(
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const keepAliveIntervalRef = useRef<number | null>(null);
 
-  // Reusable HTMLAudioElement for RVC Local playback
+  // Reusable HTMLAudioElement for server-side TTS playback (Edge TTS / VieNeu-TTS)
   const audioRef = useRef<HTMLAudioElement | null>(null);
   // Audio prefetch cache mapping sentenceIndex -> CacheEntry
   const prefetchCacheRef = useRef<Map<number, CacheEntry>>(new Map());
@@ -164,39 +181,66 @@ export function useTTS(
     });
   }, []);
 
-  // Server health probe
-  const checkRVCServerHealth = useCallback(async (customUrl?: string): Promise<boolean> => {
+  // Server health probe - kiem tra dung backend theo engine dang chon.
+  // 'browser' khong can kiem tra (chay client-side, luon san sang).
+  // 'edge-tts' kiem tra server.js: khong co khai niem "model da tai" (Edge TTS
+  //   la dich vu cloud, khong luu trang thai cuc bo) - chi can server phan hoi la
+  //   coi nhu san sang, loi thuc su (vd mat mang toi Microsoft) se lo ra khi goi /speak.
+  // 'vieneu-tts' kiem tra python-backend: 'ok:true, vieneu_ready:false' la trang
+  //   thai BINH THUONG (chua goi /speak lan nao, se tu tai model khi can) - khong
+  //   phai loi, nen van bao 'connected' de khong gay hoang mang nguoi dung; chi
+  //   khi 'ok:false' (da thu tai model nhung that bai) moi bao trang thai loi.
+  const checkTTSServerHealth = useCallback(async (
+    provider?: TTSProvider,
+    customUrl?: string
+  ): Promise<boolean> => {
+    const activeProvider = provider || settingsRef.current.ttsProvider;
+    if (activeProvider === 'browser') {
+      setTtsServerStatus('connected');
+      return true;
+    }
+
     const targetUrl = (
       customUrl ||
-      settingsRef.current.rvcServerUrl ||
-      'http://localhost:8008'
+      (activeProvider === 'edge-tts' ? settingsRef.current.edgeTtsProxyUrl : settingsRef.current.vieneuServerUrl) ||
+      (activeProvider === 'edge-tts' ? 'http://localhost:3001' : 'http://localhost:8008')
     ).replace(/\/+$/, '');
-    setRvcServerStatus('checking');
+
+    setTtsServerStatus('checking');
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 2500);
       const res = await fetch(`${targetUrl}/health`, { signal: controller.signal });
       clearTimeout(timeoutId);
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.ok === true && data.model_loaded === true) {
-          setRvcServerStatus('connected');
-          setServerErrorMessage(null);
-          return true;
-        } else if (data && !data.model_loaded) {
-          setRvcServerStatus('no-model');
-          const errorMsg =
-            data.error ||
-            'Server đang chạy nhưng chưa có model giọng hợp lệ (kiểm tra terminal server.py để xem lỗi chi tiết).';
-          setServerErrorMessage(errorMsg);
-          return false;
-        }
+
+      if (!res.ok) {
+        setTtsServerStatus('unreachable');
+        setServerErrorMessage('Server phản hồi nhưng trạng thái không sẵn sàng');
+        return false;
       }
-      setRvcServerStatus('unreachable');
-      setServerErrorMessage('Server phản hồi nhưng trạng thái không sẵn sàng');
+
+      const data = await res.json();
+
+      if (activeProvider === 'edge-tts') {
+        // server.js: khong co "model" - phan hoi duoc la coi nhu san sang.
+        setTtsServerStatus('connected');
+        setServerErrorMessage(null);
+        return true;
+      }
+
+      // vieneu-tts (python-backend)
+      if (data?.ok === true) {
+        setTtsServerStatus('connected');
+        setServerErrorMessage(null);
+        return true;
+      }
+      setTtsServerStatus('no-model');
+      setServerErrorMessage(
+        data?.error || 'Server đang chạy nhưng VieNeu-TTS chưa sẵn sàng (kiểm tra terminal server.py để xem chi tiết).'
+      );
       return false;
     } catch (err: unknown) {
-      setRvcServerStatus('unreachable');
+      setTtsServerStatus('unreachable');
       setServerErrorMessage(err instanceof Error ? err.message : 'Không thể kết nối');
       return false;
     }
@@ -204,10 +248,14 @@ export function useTTS(
 
   // Check health on mount or when provider/url changes
   useEffect(() => {
-    if (settings.ttsProvider === 'rvc-local') {
-      checkRVCServerHealth(settings.rvcServerUrl);
+    if (settings.ttsProvider === 'edge-tts') {
+      checkTTSServerHealth('edge-tts', settings.edgeTtsProxyUrl);
+    } else if (settings.ttsProvider === 'vieneu-tts') {
+      checkTTSServerHealth('vieneu-tts', settings.vieneuServerUrl);
+    } else {
+      setTtsServerStatus('connected'); // 'browser' - luon san sang
     }
-  }, [settings.ttsProvider, settings.rvcServerUrl, checkRVCServerHealth]);
+  }, [settings.ttsProvider, settings.edgeTtsProxyUrl, settings.vieneuServerUrl, checkTTSServerHealth]);
 
   // Load and classify available browser voices
   const loadVoices = useCallback(() => {
@@ -312,25 +360,43 @@ export function useTTS(
     }, 10000);
   }, [stopKeepAlive]);
 
-  // Helper to fetch RVC speech audio blob from server with transient retry & timeout
-  const fetchRVCSpeech = useCallback(
+  // Ho tro tim URL + duong dan + voice dung theo engine dang chon.
+  // 'edge-tts' -> server.js (POST /api/speak/edge); 'vieneu-tts' -> python-backend (POST /speak).
+  const getServerSpeechTarget = useCallback((engine: TTSProvider, settings: TTSSettings) => {
+    if (engine === 'edge-tts') {
+      return {
+        url: `${settings.edgeTtsProxyUrl.replace(/\/+$/, '')}/api/speak/edge`,
+        body: (text: string) => ({ text, voice: settings.edgeVoiceId || undefined }),
+      };
+    }
+    return {
+      url: `${settings.vieneuServerUrl.replace(/\/+$/, '')}/speak`,
+      body: (text: string) => ({ text, voice: settings.vieneuVoiceId || undefined }),
+    };
+  }, []);
+
+  // Helper de fetch audio blob tu server (edge-tts hoac vieneu-tts) voi retry & timeout.
+  // Giu nguyen kien truc retry/timeout/abort da co tu ban RVC cu - logic nay khong
+  // phu thuoc engine cu the, chi doi phan chon URL/body dich.
+  const fetchServerSpeech = useCallback(
     async (
       text: string,
-      serverUrl: string,
+      engine: TTSProvider,
+      settings: TTSSettings,
       abortController?: AbortController,
       maxRetries: number = 1
     ): Promise<string | null> => {
-      const cleanUrl = serverUrl.replace(/\/+$/, '');
+      const { url, body } = getServerSpeechTarget(engine, settings);
       const controller = abortController || new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), RVC_FETCH_TIMEOUT_MS);
+      const timeoutId = setTimeout(() => controller.abort(), SERVER_FETCH_TIMEOUT_MS);
       let status: number | null = null;
       let errorMsg = 'Lỗi kết nối server giọng đọc';
 
       try {
-        const res = await fetch(`${cleanUrl}/speak`, {
+        const res = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text, language: 'vi' }),
+          body: JSON.stringify(body(text)),
           signal: controller.signal,
         });
 
@@ -367,39 +433,40 @@ export function useTTS(
         }
 
         // Determine retry eligibility:
-        // - HTTP 5xx errors EXCEPT HTTP 503 (503 indicates model unavailable)
+        // - HTTP 5xx errors EXCEPT HTTP 503 (503 indicates engine/model unavailable)
         // - Network/transport errors without HTTP response status (excluding empty blob)
         const isRetryable =
           (status !== null && status >= 500 && status !== 503) ||
           (status === null && (err instanceof Error ? err.message !== 'Received empty audio blob' : true));
 
         if (isRetryable && maxRetries > 0 && !controller.signal.aborted) {
-          console.warn(`[VoxRead] Retry fetch RVC speech sau lỗi: ${errorMsg}`);
+          console.warn(`[VoxRead] Retry fetch ${engine} speech sau lỗi: ${errorMsg}`);
           await new Promise(resolve => setTimeout(resolve, 400));
           if (controller.signal.aborted) {
             return null;
           }
-          return fetchRVCSpeech(text, serverUrl, abortController, maxRetries - 1);
+          return fetchServerSpeech(text, engine, settings, abortController, maxRetries - 1);
         }
 
-        console.warn('RVC speech synthesis fetch failed:', errorMsg);
+        console.warn(`${engine} speech synthesis fetch failed:`, errorMsg);
         setServerErrorMessage(errorMsg);
         return null;
       } finally {
         clearTimeout(timeoutId);
       }
     },
-    []
+    [getServerSpeechTarget]
   );
 
 
   // Background prefetch for upcoming sentences (N+1, N+2)
   const prefetchUpcoming = useCallback(
     (fromIndex: number) => {
-      if (settingsRef.current.ttsProvider !== 'rvc-local') return;
+      const engine = settingsRef.current.ttsProvider;
+      if (engine === 'browser') return;
 
       const sentenceList = sentencesRef.current;
-      const serverUrl = settingsRef.current.rvcServerUrl;
+      const settingsSnapshot = settingsRef.current;
 
       for (let offset = 1; offset <= MAX_PREFETCH_AHEAD; offset++) {
         const targetIdx = fromIndex + offset;
@@ -414,7 +481,7 @@ export function useTTS(
         if (!text) continue;
 
         const controller = new AbortController();
-        const fetchPromise = fetchRVCSpeech(text, serverUrl, controller)
+        const fetchPromise = fetchServerSpeech(text, engine, settingsSnapshot, controller)
           .then(blobUrl => {
             inFlightFetchesRef.current.delete(targetIdx);
             if (blobUrl) {
@@ -430,7 +497,7 @@ export function useTTS(
         inFlightFetchesRef.current.set(targetIdx, { promise: fetchPromise, controller });
       }
     },
-    [fetchRVCSpeech]
+    [fetchServerSpeech]
   );
 
   // Speak a specific sentence
@@ -471,7 +538,7 @@ export function useTTS(
       if (provider === 'browser') {
         if (typeof window === 'undefined' || !window.speechSynthesis) return;
 
-        // Stop any playing RVC audio
+        // Stop any playing server-side TTS audio
         if (audioRef.current) {
           audioRef.current.pause();
           audioRef.current.src = '';
@@ -540,7 +607,7 @@ export function useTTS(
       }
 
       // -------------------------------------------------------------
-      // PROVIDER: RVC LOCAL SERVER (HTMLAudioElement + Fetch)
+      // PROVIDER: SERVER-SIDE TTS - Edge TTS hoac VieNeu-TTS (HTMLAudioElement + Fetch)
       // -------------------------------------------------------------
       if (typeof window !== 'undefined' && window.speechSynthesis) {
         window.speechSynthesis.cancel();
@@ -585,9 +652,10 @@ export function useTTS(
         // If not cached, fetch on demand
         if (!audioBlobUrl) {
           const controller = new AbortController();
-          audioBlobUrl = await fetchRVCSpeech(
+          audioBlobUrl = await fetchServerSpeech(
             textToSpeak,
-            settingsRef.current.rvcServerUrl,
+            settingsRef.current.ttsProvider,
+            settingsRef.current,
             controller
           );
         }
@@ -597,7 +665,8 @@ export function useTTS(
           if (isPlayingRef.current && currentIdxRef.current === index) {
             setIsPlaying(false);
             setIsPaused(false);
-            setServerErrorMessage(prev => prev || 'Không thể tạo âm thanh từ server RVC.');
+            const engineLabel = settingsRef.current.ttsProvider === 'edge-tts' ? 'Edge TTS' : 'VieNeu-TTS';
+            setServerErrorMessage(prev => prev || `Không thể tạo âm thanh từ ${engineLabel}.`);
           }
           return;
         }
@@ -702,7 +771,7 @@ export function useTTS(
       }
     },
     [
-      fetchRVCSpeech,
+      fetchServerSpeech,
       prefetchUpcoming,
       evictOldCache,
       clearPrefetchCache,
@@ -720,7 +789,7 @@ export function useTTS(
       setIsPlaying(true);
       setIsPaused(false);
 
-      if (settingsRef.current.ttsProvider === 'rvc-local') {
+      if (settingsRef.current.ttsProvider !== 'browser') {
         const audio = audioRef.current;
         // If already paused on target sentence audio, resume directly
         if (
@@ -751,7 +820,7 @@ export function useTTS(
     setIsPaused(true);
     isPausedRef.current = true;
     setIsBuffering(false);
-    if (settingsRef.current.ttsProvider === 'rvc-local') {
+    if (settingsRef.current.ttsProvider !== 'browser') {
       if (audioRef.current) {
         audioRef.current.pause();
       }
@@ -765,7 +834,7 @@ export function useTTS(
 
   // Resume
   const resume = useCallback(() => {
-    if (settingsRef.current.ttsProvider === 'rvc-local') {
+    if (settingsRef.current.ttsProvider !== 'browser') {
       const audio = audioRef.current;
       if (
         audio &&
@@ -825,7 +894,7 @@ export function useTTS(
     setIsBuffering(false);
     setCurrentWordCharIndex(null);
 
-    if (settingsRef.current.ttsProvider === 'rvc-local') {
+    if (settingsRef.current.ttsProvider !== 'browser') {
       if (audioRef.current) {
         audioRef.current.pause();
         audioRef.current.currentTime = 0;
@@ -897,35 +966,21 @@ export function useTTS(
   // Test / preview sample audio with current settings
   const testVoice = useCallback(
     async (voiceURI: string, rate: number, pitch: number, volume: number, testText?: string) => {
-      // Branch: RVC Local
-      if (settingsRef.current.ttsProvider === 'rvc-local') {
+      // Branch: Server-side TTS (Edge TTS hoac VieNeu-TTS)
+      if (settingsRef.current.ttsProvider !== 'browser') {
+        const engine = settingsRef.current.ttsProvider;
         const sampleText =
           testText ||
-          'Xin chào! Tôi là giọng đọc của bạn được nhân bản bằng mô hình RVC trong VoxRead.';
-        const targetUrl = settingsRef.current.rvcServerUrl;
+          (engine === 'edge-tts'
+            ? 'Xin chào! Đây là giọng đọc Edge TTS của Microsoft trong VoxRead.'
+            : 'Xin chào! Đây là giọng đọc VieNeu-TTS trong VoxRead.');
 
         try {
-          const res = await fetch(`${targetUrl.replace(/\/+$/, '')}/speak`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: sampleText, language: 'vi' }),
-          });
-
-          if (!res.ok) {
-            let errorDetail = `Lỗi server (${res.status}): Không thể tạo giọng đọc`;
-            try {
-              const errData = await res.json();
-              if (errData && typeof errData.error === 'string') {
-                errorDetail = errData.error;
-              }
-            } catch {
-              // fallback
-            }
-            throw new Error(errorDetail);
+          const blobUrl = await fetchServerSpeech(sampleText, engine, settingsRef.current);
+          if (!blobUrl) {
+            // fetchServerSpeech da tu goi setServerErrorMessage() khi that bai - khong can lap lai o day.
+            return;
           }
-
-          const blob = await res.blob();
-          const blobUrl = URL.createObjectURL(blob);
 
           if (testAudioRef.current) {
             testAudioRef.current.pause();
@@ -941,7 +996,7 @@ export function useTTS(
           }
         } catch (err: unknown) {
           const errorMsg = err instanceof Error ? err.message : 'Lỗi khi thử giọng';
-          console.warn('RVC testVoice failed:', errorMsg);
+          console.warn(`${engine} testVoice failed:`, errorMsg);
           setServerErrorMessage(errorMsg);
         }
         return;
@@ -973,7 +1028,7 @@ export function useTTS(
 
       window.speechSynthesis.speak(utterance);
     },
-    []
+    [fetchServerSpeech]
   );
 
   // Update & persist settings
@@ -1009,9 +1064,9 @@ export function useTTS(
     isBuffering,
     currentSentenceIndex,
     currentWordCharIndex,
-    rvcServerStatus,
+    ttsServerStatus,
     serverErrorMessage,
-    checkRVCServerHealth,
+    checkTTSServerHealth,
     play,
     pause,
     resume,

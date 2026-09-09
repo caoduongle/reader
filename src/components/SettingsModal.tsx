@@ -24,7 +24,6 @@ import {
   Folder,
   FolderOpen,
   Plus,
-  Copy,
 } from 'lucide-react';
 import {
   TTSSettings,
@@ -33,22 +32,32 @@ import {
   FontFamily,
   HighlightStyle,
   MascotType,
-  RVCServerStatus,
+  TTSServerStatus,
 } from '../types';
 import { THEMES, FONT_FAMILIES } from '../utils/themeStyles';
-import { useVoiceServerStatus } from '../hooks/useVoiceServerStatus';
 
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   settings: TTSSettings;
   voices: TTSVoiceOption[];
-  rvcServerStatus?: RVCServerStatus;
+  ttsServerStatus?: TTSServerStatus;
   serverErrorMessage?: string | null;
-  onCheckRVCHealth?: (url?: string) => Promise<boolean>;
+  onCheckTTSHealth?: (provider?: TTSSettings['ttsProvider'], url?: string) => Promise<boolean>;
   onSaveSettings: (newSettings: TTSSettings) => void;
   onTestVoice: (voiceURI: string, rate: number, pitch: number, volume: number) => void;
 }
+
+// Feature 048-desktop-tts-migration: danh sach rut gon cac giong Edge TTS pho
+// bien - co the mo rong/fetch dong sau nay, nhung mot danh sach tinh la du cho
+// nhu cau hien tai va tranh phai goi API rieng chi de liet ke giong.
+const EDGE_TTS_VOICES = [
+  { id: 'vi-VN-HoaiMyNeural', label: 'Hoài My (Nữ, miền Bắc)' },
+  { id: 'vi-VN-NamMinhNeural', label: 'Nam Minh (Nam, miền Bắc)' },
+  { id: 'en-US-AvaNeural', label: 'Ava (English, US)' },
+  { id: 'en-US-AndrewNeural', label: 'Andrew (English, US)' },
+  { id: 'ja-JP-NanamiNeural', label: 'Nanami (日本語)' },
+];
 
 const PREDEFINED_SPEEDS = [
   { value: 0.5, label: '0.5x', desc: 'Very Slow' },
@@ -67,9 +76,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onClose,
   settings,
   voices,
-  rvcServerStatus,
+  ttsServerStatus,
   serverErrorMessage,
-  onCheckRVCHealth,
+  onCheckTTSHealth,
   onSaveSettings,
   onTestVoice,
 }) => {
@@ -78,66 +87,39 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [voiceSearch, setVoiceSearch] = useState('');
   const [selectedLangFilter, setSelectedLangFilter] = useState<string>('all');
   const [showSavedFeedback, setShowSavedFeedback] = useState(false);
-  const {
-    status: polledStatus,
-    isChecking: isPollingChecking,
-    checkHealth: pollCheckHealth,
-    modelDir: polledModelDir,
-    modelName: polledModelName,
-    reloadModel,
-    errorMessage: polledErrorMessage,
-  } = useVoiceServerStatus({
-    serverUrl: localSettings.rvcServerUrl || 'http://localhost:8008',
-    enabled: isOpen && localSettings.ttsProvider === 'rvc-local',
-    intervalMs: 6000,
-  });
 
-  const [modelInfo, setModelInfo] = useState<{
-    modelDir: string;
-    activeModel: string | null;
-    activeIndex: string | null;
-    pthFiles: string[];
-    indexFiles: string[];
-  } | null>(null);
-  const [isImportingModel, setIsImportingModel] = useState(false);
-  const [importFeedback, setImportFeedback] = useState<string | null>(null);
+  const [isCheckingHealth, setIsCheckingHealth] = useState(false);
+  const effectiveStatus: TTSServerStatus = ttsServerStatus || 'unknown';
 
-  const fetchModelList = useCallback(async () => {
+  // Danh sach giong VieNeu (dung san + da nhan ban) - fetch tu GET /voices.
+  // Thay the hoan toan modelInfo/pthFiles/indexFiles cua RVC truoc day.
+  const [vieneuVoices, setVieneuVoices] = useState<
+    { id: string; description: string; isUserVoice: boolean }[]
+  >([]);
+  const [isCloningVoice, setIsCloningVoice] = useState(false);
+  const [cloneFeedback, setCloneFeedback] = useState<string | null>(null);
+  const [newVoiceName, setNewVoiceName] = useState('');
+  const [newVoiceFile, setNewVoiceFile] = useState<File | null>(null);
+
+  const fetchVieneuVoices = useCallback(async () => {
     try {
-      const cleanUrl = (localSettings.rvcServerUrl || 'http://localhost:8008').replace(/\/+$/, '');
-      const res = await fetch(`${cleanUrl}/model/list`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.ok) {
-          setModelInfo({
-            modelDir: data.model_dir,
-            activeModel: data.active_model,
-            activeIndex: data.active_index,
-            pthFiles: data.pth_files || [],
-            indexFiles: data.index_files || [],
-          });
-          return;
-        }
+      const cleanUrl = (localSettings.vieneuServerUrl || 'http://localhost:8008').replace(/\/+$/, '');
+      const res = await fetch(`${cleanUrl}/voices`);
+      const data = await res.json().catch(() => null);
+      if (data && Array.isArray(data.voices)) {
+        setVieneuVoices(data.voices);
       }
     } catch {
-      // Server may be offline
+      // Server co the dang offline hoac chua khoi dong xong - khong can bao loi rieng o day,
+      // banner trang thai ket noi ben duoi da the hien dieu do.
     }
-  }, [localSettings.rvcServerUrl]);
+  }, [localSettings.vieneuServerUrl]);
 
   useEffect(() => {
-    if (isOpen && localSettings.ttsProvider === 'rvc-local') {
-      fetchModelList();
+    if (isOpen && localSettings.ttsProvider === 'vieneu-tts') {
+      fetchVieneuVoices();
     }
-  }, [isOpen, localSettings.ttsProvider, polledStatus, fetchModelList]);
-
-  const effectiveStatus: RVCServerStatus =
-    localSettings.ttsProvider === 'rvc-local'
-      ? polledStatus
-      : rvcServerStatus || 'unknown';
-
-  const activeModelName = modelInfo?.activeModel || polledModelName;
-
-  const isCheckingHealth = isPollingChecking;
+  }, [isOpen, localSettings.ttsProvider, fetchVieneuVoices]);
 
   // Synchronize local settings when modal opens
   useEffect(() => {
@@ -146,60 +128,81 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   }, [isOpen, settings]);
 
-  const handleCheckHealth = async () => {
-    if (onCheckRVCHealth) {
-      await onCheckRVCHealth(localSettings.rvcServerUrl);
+  const handleCheckHealth = async (explicitProvider?: TTSSettings['ttsProvider']) => {
+    const provider = explicitProvider || localSettings.ttsProvider;
+    setIsCheckingHealth(true);
+    try {
+      if (onCheckTTSHealth) {
+        const url = provider === 'edge-tts' ? localSettings.edgeTtsProxyUrl : localSettings.vieneuServerUrl;
+        await onCheckTTSHealth(provider, url);
+      }
+      if (provider === 'vieneu-tts') {
+        await fetchVieneuVoices();
+      }
+    } finally {
+      setIsCheckingHealth(false);
     }
-    await pollCheckHealth();
-    await fetchModelList();
   };
 
-  const handleImportModel = async () => {
-    setIsImportingModel(true);
-    setImportFeedback(null);
+  // Nhan ban giong tuc thi tu 1 clip audio 3-8 giay - KHONG can train, thay the
+  // hoan toan quy trinh train RVC qua Google Colab. Renderer goi thang toi
+  // python-backend qua fetch()/FormData, giong het cach fileParser.ts doc file
+  // TXT/EPUB/PDF - khong can IPC bridge rieng cho buoc upload nay.
+  const handleCloneVoice = async () => {
+    if (!newVoiceName.trim() || !newVoiceFile) {
+      setCloneFeedback('Hãy nhập tên và chọn file audio mẫu (3-8 giây).');
+      return;
+    }
+    setIsCloningVoice(true);
+    setCloneFeedback(null);
     try {
-      if (window.voxreadDesktop?.models?.importModel) {
-        const result = await window.voxreadDesktop.models.importModel();
-        if (result.success && result.importedFiles && result.importedFiles.length > 0) {
-          setImportFeedback(`Đã thêm thành công: ${result.importedFiles.join(', ')}`);
-          await reloadModel();
-          await fetchModelList();
-          await handleCheckHealth();
-        } else if (result.error) {
-          setImportFeedback(`Lỗi thêm model: ${result.error}`);
-        }
+      const cleanUrl = (localSettings.vieneuServerUrl || 'http://localhost:8008').replace(/\/+$/, '');
+      const formData = new FormData();
+      formData.append('name', newVoiceName.trim());
+      formData.append('audio', newVoiceFile);
+
+      const res = await fetch(`${cleanUrl}/voices/add`, { method: 'POST', body: formData });
+      const data = await res.json().catch(() => null);
+
+      if (res.ok && data?.success) {
+        setCloneFeedback(`Đã nhân bản giọng "${data.voiceName}" thành công!`);
+        setNewVoiceName('');
+        setNewVoiceFile(null);
+        await fetchVieneuVoices();
+        setLocalSettings(prev => ({ ...prev, vieneuVoiceId: data.voiceName }));
       } else {
-        // Browser fallback
-        const targetDir = modelInfo?.modelDir || polledModelDir || 'python-backend/model';
-        try {
-          await navigator.clipboard.writeText(targetDir);
-          setImportFeedback(`Đã copy đường dẫn vào clipboard: ${targetDir}. Vui lòng copy file .pth/.index vào thư mục này rồi bấm "Kiểm tra".`);
-        } catch {
-          setImportFeedback(`Vui lòng copy file .pth/.index vào thư mục: ${targetDir} rồi bấm "Kiểm tra".`);
-        }
+        setCloneFeedback(data?.error || `Lỗi server (${res.status}): Không thể nhân bản giọng.`);
       }
     } catch (err) {
-      setImportFeedback(err instanceof Error ? err.message : 'Lỗi khi thêm model');
+      setCloneFeedback(err instanceof Error ? err.message : 'Lỗi khi nhân bản giọng');
     } finally {
-      setIsImportingModel(false);
+      setIsCloningVoice(false);
     }
   };
 
-  const handleOpenModelFolder = async () => {
-    if (window.voxreadDesktop?.models?.openFolder) {
-      const res = await window.voxreadDesktop.models.openFolder();
+  const handleDeleteVoice = async (name: string) => {
+    try {
+      const cleanUrl = (localSettings.vieneuServerUrl || 'http://localhost:8008').replace(/\/+$/, '');
+      const res = await fetch(`${cleanUrl}/voices/${encodeURIComponent(name)}`, { method: 'DELETE' });
+      if (res.ok) {
+        await fetchVieneuVoices();
+        if (localSettings.vieneuVoiceId === name) {
+          setLocalSettings(prev => ({ ...prev, vieneuVoiceId: '' }));
+        }
+      }
+    } catch {
+      // Bo qua - danh sach se tu dong dung neu request that bai giua chung.
+    }
+  };
+
+  const handleOpenVoicesFolder = async () => {
+    if (window.voxreadDesktop?.voiceClone?.openVoicesFolder) {
+      const res = await window.voxreadDesktop.voiceClone.openVoicesFolder();
       if (!res.success && res.error) {
-        setImportFeedback(`Không thể mở thư mục: ${res.error}`);
+        setCloneFeedback(`Không thể mở thư mục: ${res.error}`);
       }
     } else {
-      // Browser fallback
-      const targetDir = modelInfo?.modelDir || polledModelDir || 'python-backend/model';
-      try {
-        await navigator.clipboard.writeText(targetDir);
-        setImportFeedback(`Đã copy đường dẫn: ${targetDir}`);
-      } catch {
-        setImportFeedback(`Đường dẫn thư mục: ${targetDir}`);
-      }
+      setCloneFeedback('Thư mục giọng nói: python-backend/voices');
     }
   };
 
@@ -481,7 +484,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </div>
                   </div>
 
-                  {localSettings.ttsProvider === 'rvc-local' && (
+                  {localSettings.ttsProvider !== 'browser' && (
                     <div className="flex items-center space-x-2">
                       <span
                         className={`w-2.5 h-2.5 rounded-full ${
@@ -498,7 +501,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         {effectiveStatus === 'connected'
                           ? 'Đã kết nối'
                           : effectiveStatus === 'no-model' || effectiveStatus === 'model_missing'
-                            ? 'Chưa có model'
+                            ? 'Chưa sẵn sàng'
                             : effectiveStatus === 'checking'
                               ? 'Đang kiểm tra...'
                               : 'Chưa kết nối'}
@@ -507,7 +510,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   )}
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <button
                     type="button"
                     id="provider-browser-btn"
@@ -519,9 +522,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     }`}
                   >
                     <div>
-                      <div className="text-xs font-semibold text-white">Giọng máy (mặc định)</div>
+                      <div className="text-xs font-semibold text-white">Giọng máy</div>
                       <div className="text-[10px] text-slate-400">
-                        Giọng Web Speech của trình duyệt/hệ thống
+                        Web Speech API - 0 cài đặt, hoạt động ngay
                       </div>
                     </div>
                     {localSettings.ttsProvider === 'browser' && (
@@ -531,42 +534,64 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                   <button
                     type="button"
-                    id="provider-rvc-btn"
+                    id="provider-edge-tts-btn"
                     onClick={() => {
-                      setLocalSettings({ ...localSettings, ttsProvider: 'rvc-local' });
-                      handleCheckHealth();
+                      setLocalSettings({ ...localSettings, ttsProvider: 'edge-tts' });
+                      handleCheckHealth('edge-tts');
                     }}
                     className={`p-3 rounded-xl border text-left transition-all flex items-center justify-between cursor-pointer ${
-                      localSettings.ttsProvider === 'rvc-local'
+                      localSettings.ttsProvider === 'edge-tts'
                         ? 'bg-amber-600/20 border-amber-500 text-white font-bold ring-1 ring-amber-500/40'
                         : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
                     }`}
                   >
                     <div>
-                      <div className="text-xs font-semibold text-white">
-                        Giọng của tôi (RVC local)
-                      </div>
+                      <div className="text-xs font-semibold text-white">Edge TTS</div>
                       <div className="text-[10px] text-slate-400">
-                        Voice cloning từ server Python local
+                        Giọng Microsoft - cần Internet
                       </div>
                     </div>
-                    {localSettings.ttsProvider === 'rvc-local' && (
+                    {localSettings.ttsProvider === 'edge-tts' && (
+                      <Check className="w-4 h-4 text-amber-400" />
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    id="provider-vieneu-tts-btn"
+                    onClick={() => {
+                      setLocalSettings({ ...localSettings, ttsProvider: 'vieneu-tts' });
+                      handleCheckHealth('vieneu-tts');
+                    }}
+                    className={`p-3 rounded-xl border text-left transition-all flex items-center justify-between cursor-pointer ${
+                      localSettings.ttsProvider === 'vieneu-tts'
+                        ? 'bg-amber-600/20 border-amber-500 text-white font-bold ring-1 ring-amber-500/40'
+                        : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
+                    }`}
+                  >
+                    <div>
+                      <div className="text-xs font-semibold text-white">VieNeu-TTS</div>
+                      <div className="text-[10px] text-slate-400">
+                        Giọng Việt + nhân bản giọng, chạy offline
+                      </div>
+                    </div>
+                    {localSettings.ttsProvider === 'vieneu-tts' && (
                       <Check className="w-4 h-4 text-amber-400" />
                     )}
                   </button>
                 </div>
               </div>
 
-              {/* RVC LOCAL SERVER SETTINGS */}
-              {localSettings.ttsProvider === 'rvc-local' ? (
+              {/* EDGE TTS SETTINGS */}
+              {localSettings.ttsProvider === 'edge-tts' ? (
                 <div className="p-4 rounded-2xl bg-[#16161A] border border-white/10 space-y-4">
                   <div className="flex items-center justify-between">
                     <label className="text-sm font-semibold text-white flex items-center space-x-2">
                       <Server className="w-4 h-4 text-amber-500" />
-                      <span>Cấu hình Server RVC Local</span>
+                      <span>Cấu hình Edge TTS (Microsoft)</span>
                     </label>
                     <button
-                      id="test-rvc-voice-btn"
+                      id="test-edge-voice-btn"
                       onClick={handleTestCurrentVoice}
                       className="px-3 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded-lg text-xs font-semibold flex items-center space-x-1.5 transition-colors border border-amber-500/30 cursor-pointer"
                     >
@@ -576,70 +601,56 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </div>
 
                   <div className="space-y-2">
-                    <div className="text-xs text-slate-300">Địa chỉ Server RVC (URL):</div>
-                    <div className="flex gap-2">
-                      <input
-                        id="rvc-server-url-input"
-                        type="text"
-                        value={localSettings.rvcServerUrl}
-                        onChange={e =>
-                          setLocalSettings({ ...localSettings, rvcServerUrl: e.target.value })
-                        }
-                        placeholder="http://localhost:8008"
-                        className="flex-1 px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-xs font-mono text-slate-200 focus:outline-none focus:border-amber-500"
-                      />
-                      <button
-                        type="button"
-                        onClick={handleCheckHealth}
-                        disabled={isCheckingHealth}
-                        className="px-3 py-2 bg-white/10 hover:bg-white/15 text-slate-200 rounded-xl text-xs font-semibold flex items-center space-x-1.5 border border-white/10 transition-colors disabled:opacity-50 cursor-pointer"
-                        title="Kiểm tra kết nối tới server"
-                      >
-                        <RefreshCw
-                          className={`w-3.5 h-3.5 ${isCheckingHealth ? 'animate-spin text-amber-400' : ''}`}
-                        />
-                        <span>Kiểm tra</span>
-                      </button>
-                    </div>
+                    <div className="text-xs text-slate-300">Giọng Edge TTS:</div>
+                    <select
+                      id="edge-voice-select"
+                      value={localSettings.edgeVoiceId}
+                      onChange={e => setLocalSettings({ ...localSettings, edgeVoiceId: e.target.value })}
+                      className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+                    >
+                      {EDGE_TTS_VOICES.map(v => (
+                        <option key={v.id} value={v.id} className="bg-[#16161A]">
+                          {v.label}
+                        </option>
+                      ))}
+                    </select>
                   </div>
 
-                  {/* Warning banner when model is missing or failed */}
-                  {(effectiveStatus === 'no-model' || effectiveStatus === 'model_missing') && (
-                    <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start space-x-2.5 text-xs text-amber-300">
-                      <AlertCircle className="w-4 h-4 shrink-0 text-amber-400 mt-0.5" />
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleCheckHealth('edge-tts')}
+                      disabled={isCheckingHealth}
+                      className="px-3 py-2 bg-white/10 hover:bg-white/15 text-slate-200 rounded-xl text-xs font-semibold flex items-center space-x-1.5 border border-white/10 transition-colors disabled:opacity-50 cursor-pointer"
+                      title="Kiểm tra kết nối tới server.js"
+                    >
+                      <RefreshCw
+                        className={`w-3.5 h-3.5 ${isCheckingHealth ? 'animate-spin text-amber-400' : ''}`}
+                      />
+                      <span>Kiểm tra kết nối</span>
+                    </button>
+                  </div>
+
+                  {/* Warning banner when unreachable */}
+                  {effectiveStatus === 'unreachable' && (
+                    <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-start space-x-2.5 text-xs text-rose-300">
+                      <AlertCircle className="w-4 h-4 shrink-0 text-rose-400 mt-0.5" />
                       <div className="space-y-2 flex-1">
-                        <div className="font-semibold text-amber-200">
-                          Server giọng đọc đang chạy nhưng chưa có model hợp lệ
+                        <div className="font-semibold text-rose-200">
+                          Không kết nối được tới server.js tại{' '}
+                          {localSettings.edgeTtsProxyUrl || 'http://localhost:3001'}
                         </div>
-                        <div className="text-[11px] text-amber-300/90 leading-relaxed">
-                          {serverErrorMessage || polledErrorMessage || (
-                            <>
-                              Chưa có model trong thư mục{' '}
-                              <code className="mx-1 px-1.5 py-0.5 bg-black/40 rounded text-amber-300 font-mono">
-                                {modelInfo?.modelDir || polledModelDir || 'python-backend/model'}
-                              </code>
-                              . Thêm model của bạn để bắt đầu dùng giọng đọc riêng.
-                            </>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2 pt-1">
-                          <button
-                            type="button"
-                            onClick={handleImportModel}
-                            disabled={isImportingModel}
-                            className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-black font-semibold rounded-lg text-xs flex items-center space-x-1.5 transition-colors cursor-pointer shadow-sm disabled:opacity-50"
-                          >
-                            <Plus className="w-3.5 h-3.5" />
-                            <span>{isImportingModel ? 'Đang thêm model...' : '+ Thêm model'}</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={handleOpenModelFolder}
-                            className="px-2.5 py-1.5 bg-white/10 hover:bg-white/15 text-slate-200 rounded-lg text-xs font-medium flex items-center space-x-1 transition-colors cursor-pointer"
-                          >
-                            <FolderOpen className="w-3.5 h-3.5 text-slate-300" />
-                            <span>Mở thư mục</span>
-                          </button>
+                        {serverErrorMessage && (
+                          <div className="text-[11px] text-rose-300 font-mono bg-black/30 px-2 py-1 rounded border border-rose-500/20">
+                            {serverErrorMessage}
+                          </div>
+                        )}
+                        <div className="text-[11px] text-rose-300/80 leading-relaxed">
+                          Server Node có đang chạy không? Hãy chạy{' '}
+                          <code className="mx-1 px-1.5 py-0.5 bg-black/40 rounded text-amber-300 font-mono">
+                            node server.js
+                          </code>{' '}
+                          trong terminal rồi thử lại, hoặc chuyển về &quot;Giọng máy&quot; để tiếp tục đọc sách.
                         </div>
                       </div>
                     </div>
@@ -658,6 +669,85 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </div>
                   )}
 
+                  {/* Info notice when connected */}
+                  {effectiveStatus === 'connected' && !serverErrorMessage && (
+                    <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center space-x-2 text-xs text-emerald-300">
+                      <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <span>
+                        Edge TTS sẵn sàng. Cần kết nối Internet mỗi khi phát (dịch vụ của Microsoft).
+                      </span>
+                    </div>
+                  )}
+                </div>
+              ) : localSettings.ttsProvider === 'vieneu-tts' ? (
+                <div className="p-4 rounded-2xl bg-[#16161A] border border-white/10 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-semibold text-white flex items-center space-x-2">
+                      <Server className="w-4 h-4 text-amber-500" />
+                      <span>Cấu hình VieNeu-TTS (local)</span>
+                    </label>
+                    <button
+                      id="test-vieneu-voice-btn"
+                      onClick={handleTestCurrentVoice}
+                      className="px-3 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded-lg text-xs font-semibold flex items-center space-x-1.5 transition-colors border border-amber-500/30 cursor-pointer"
+                    >
+                      <Play className="w-3 h-3 fill-amber-300" />
+                      <span>Thử giọng</span>
+                    </button>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="text-xs text-slate-300">Địa chỉ server VieNeu-TTS (URL):</div>
+                    <div className="flex gap-2">
+                      <input
+                        id="vieneu-server-url-input"
+                        type="text"
+                        value={localSettings.vieneuServerUrl}
+                        onChange={e =>
+                          setLocalSettings({ ...localSettings, vieneuServerUrl: e.target.value })
+                        }
+                        placeholder="http://localhost:8008"
+                        className="flex-1 px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-xs font-mono text-slate-200 focus:outline-none focus:border-amber-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleCheckHealth('vieneu-tts')}
+                        disabled={isCheckingHealth}
+                        className="px-3 py-2 bg-white/10 hover:bg-white/15 text-slate-200 rounded-xl text-xs font-semibold flex items-center space-x-1.5 border border-white/10 transition-colors disabled:opacity-50 cursor-pointer"
+                        title="Kiểm tra kết nối tới server"
+                      >
+                        <RefreshCw
+                          className={`w-3.5 h-3.5 ${isCheckingHealth ? 'animate-spin text-amber-400' : ''}`}
+                        />
+                        <span>Kiểm tra</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {vieneuVoices.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="text-xs text-slate-300">Giọng VieNeu-TTS:</div>
+                      <select
+                        id="vieneu-voice-select"
+                        value={localSettings.vieneuVoiceId}
+                        onChange={e =>
+                          setLocalSettings({ ...localSettings, vieneuVoiceId: e.target.value })
+                        }
+                        className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+                      >
+                        <option value="" className="bg-[#16161A]">
+                          (Mặc định)
+                        </option>
+                        {vieneuVoices.map(v => (
+                          <option key={v.id} value={v.id} className="bg-[#16161A]">
+                            {v.id}
+                            {v.isUserVoice ? ' (đã nhân bản)' : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
                   {/* Warning banner when unreachable */}
                   {effectiveStatus === 'unreachable' && (
                     <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-start space-x-2.5 text-xs text-rose-300">
@@ -665,7 +755,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <div className="space-y-2 flex-1">
                         <div className="font-semibold text-rose-200">
                           Không kết nối được server giọng đọc tại{' '}
-                          {localSettings.rvcServerUrl || 'http://localhost:8008'}
+                          {localSettings.vieneuServerUrl || 'http://localhost:8008'}
                         </div>
                         {serverErrorMessage && (
                           <div className="text-[11px] text-rose-300 font-mono bg-black/30 px-2 py-1 rounded border border-rose-500/20">
@@ -675,152 +765,133 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         <div className="text-[11px] text-rose-300/80 leading-relaxed">
                           Server Python có đang chạy không? Hãy chạy{' '}
                           <code className="mx-1 px-1.5 py-0.5 bg-black/40 rounded text-amber-300 font-mono">
-                            python server.py
-                          </code>{' '}
-                          (hoặc{' '}
-                          <code className="mx-1 px-1.5 py-0.5 bg-black/40 rounded text-amber-300 font-mono">
                             python python-backend/server.py
-                          </code>
-                          ) trong terminal rồi thử lại, hoặc chuyển về &quot;Giọng máy (mặc định)&quot; để tiếp tục đọc sách.
+                          </code>{' '}
+                          trong terminal rồi thử lại, hoặc chuyển về &quot;Giọng máy&quot; để tiếp tục đọc sách.
                         </div>
-                        <div className="flex items-center gap-2 pt-1">
-                          <button
-                            type="button"
-                            onClick={handleImportModel}
-                            disabled={isImportingModel}
-                            className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-black font-semibold rounded-lg text-xs flex items-center space-x-1.5 transition-colors cursor-pointer shadow-sm disabled:opacity-50"
-                          >
-                            <Plus className="w-3.5 h-3.5" />
-                            <span>{isImportingModel ? 'Đang thêm model...' : '+ Thêm model'}</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={handleOpenModelFolder}
-                            className="px-2.5 py-1.5 bg-white/10 hover:bg-white/15 text-slate-200 rounded-lg text-xs font-medium flex items-center space-x-1 transition-colors cursor-pointer"
-                          >
-                            <FolderOpen className="w-3.5 h-3.5 text-slate-300" />
-                            <span>Mở thư mục</span>
-                          </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Warning banner when init failed (thuong la loi mang lan tai model dau tien) */}
+                  {effectiveStatus === 'no-model' && (
+                    <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start space-x-2.5 text-xs text-amber-300">
+                      <AlertCircle className="w-4 h-4 shrink-0 text-amber-400 mt-0.5" />
+                      <div className="space-y-1 flex-1">
+                        <div className="font-semibold text-amber-200">VieNeu-TTS chưa sẵn sàng</div>
+                        <div className="text-[11px] text-amber-300/90 leading-relaxed">
+                          {serverErrorMessage ||
+                            'Lần đầu dùng VieNeu-TTS cần tải model (yêu cầu Internet). Kiểm tra kết nối rồi bấm "Kiểm tra" lại.'}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Warning banner when test voice failed while connected */}
+                  {effectiveStatus === 'connected' && serverErrorMessage && (
+                    <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-start space-x-2.5 text-xs text-rose-300">
+                      <AlertCircle className="w-4 h-4 shrink-0 text-rose-400 mt-0.5" />
+                      <div className="flex-1 space-y-1">
+                        <div className="font-semibold text-rose-200">Lỗi khi thử giọng</div>
+                        <div className="text-[11px] text-rose-300/90 leading-relaxed">
+                          {serverErrorMessage}
                         </div>
                       </div>
                     </div>
                   )}
 
                   {/* Info notice when connected */}
-                  {effectiveStatus === 'connected' && (
+                  {effectiveStatus === 'connected' && !serverErrorMessage && (
                     <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center space-x-2 text-xs text-emerald-300">
                       <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-                      <span>
-                        Server RVC đã sẵn sàng! Giọng đọc cá nhân hóa sẽ được áp dụng tự động khi
-                        phát sách.
-                      </span>
+                      <span>VieNeu-TTS đã sẵn sàng, chạy offline sau lần tải model đầu tiên.</span>
                     </div>
                   )}
 
-                  {/* QUẢN LÝ MODEL GIỌNG ĐỌC (CỐ ĐỊNH) */}
+                  {/* NHAN BAN GIONG - thay the hoan toan quy trinh train RVC qua Colab */}
                   <div className="p-4 rounded-xl bg-black/30 border border-white/5 space-y-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-2">
                         <Folder className="w-4 h-4 text-amber-500" />
                         <span className="text-xs font-bold text-white uppercase tracking-wider">
-                          Quản lý model giọng đọc
+                          Nhân bản giọng của tôi
                         </span>
                       </div>
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={handleOpenModelFolder}
-                          className="px-2.5 py-1 bg-white/5 hover:bg-white/10 text-slate-300 rounded-lg text-[11px] font-medium flex items-center space-x-1 border border-white/10 transition-colors cursor-pointer"
-                          title="Mở thư mục chứa file model"
-                        >
-                          <FolderOpen className="w-3 h-3 text-slate-400" />
-                          <span>Mở thư mục</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleImportModel}
-                          disabled={isImportingModel}
-                          className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-black rounded-lg text-[11px] font-semibold flex items-center space-x-1 transition-colors cursor-pointer disabled:opacity-50"
-                        >
-                          <Plus className="w-3 h-3" />
-                          <span>{isImportingModel ? 'Đang thêm...' : '+ Thêm model'}</span>
-                        </button>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={handleOpenVoicesFolder}
+                        className="px-2.5 py-1 bg-white/5 hover:bg-white/10 text-slate-300 rounded-lg text-[11px] font-medium flex items-center space-x-1 border border-white/10 transition-colors cursor-pointer"
+                        title="Mở thư mục chứa giọng đã nhân bản"
+                      >
+                        <FolderOpen className="w-3 h-3 text-slate-400" />
+                        <span>Mở thư mục</span>
+                      </button>
                     </div>
 
-                    <div className="space-y-1.5 text-[11px]">
-                      <div className="flex items-center justify-between text-slate-400">
-                        <span>Đường dẫn thư mục model:</span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const path =
-                              modelInfo?.modelDir ||
-                              polledModelDir ||
-                              'python-backend/model';
-                            navigator.clipboard.writeText(path);
-                            setImportFeedback('Đã copy đường dẫn vào clipboard');
-                          }}
-                          className="text-amber-400/80 hover:text-amber-300 flex items-center space-x-1 text-[10px] cursor-pointer"
-                        >
-                          <Copy className="w-2.5 h-2.5" />
-                          <span>Copy</span>
-                        </button>
-                      </div>
-                      <div className="px-2.5 py-1.5 bg-black/40 rounded-lg font-mono text-[11px] text-slate-300 truncate select-all border border-white/5">
-                        {modelInfo?.modelDir || polledModelDir || 'python-backend/model'}
-                      </div>
+                    <div className="text-[11px] text-slate-400 leading-relaxed">
+                      Chỉ cần 1 đoạn ghi âm 3-8 giây, giọng mới xuất hiện ngay - không cần train như
+                      trước đây.
                     </div>
 
-                    {/* Danh sách file model */}
-                    <div className="space-y-1.5 pt-1">
-                      <div className="text-[11px] text-slate-400 flex items-center justify-between">
-                        <span>Danh sách file model (.pth / .index):</span>
-                        <span className="text-[10px] text-slate-500 font-mono">
-                          {(modelInfo?.pthFiles.length || 0)} file .pth
-                        </span>
-                      </div>
-                      {modelInfo?.pthFiles && modelInfo.pthFiles.length > 0 ? (
+                    <div className="space-y-2">
+                      <input
+                        type="text"
+                        value={newVoiceName}
+                        onChange={e => setNewVoiceName(e.target.value)}
+                        placeholder="Đặt tên cho giọng (vd: Giọng của tôi)"
+                        maxLength={40}
+                        className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+                      />
+                      <input
+                        id="voice-clone-file-input"
+                        type="file"
+                        accept="audio/*,.wav,.mp3,.m4a"
+                        onChange={e => setNewVoiceFile(e.target.files?.[0] || null)}
+                        className="w-full text-[11px] text-slate-300 file:mr-2 file:px-2.5 file:py-1.5 file:rounded-lg file:border-0 file:bg-white/10 file:text-slate-200 file:text-[11px] hover:file:bg-white/15 cursor-pointer"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleCloneVoice}
+                        disabled={isCloningVoice || !newVoiceName.trim() || !newVoiceFile}
+                        className="w-full px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-black font-semibold rounded-lg text-xs flex items-center justify-center space-x-1.5 transition-colors cursor-pointer shadow-sm disabled:opacity-50"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>{isCloningVoice ? 'Đang nhân bản...' : 'Nhân bản giọng'}</span>
+                      </button>
+                    </div>
+
+                    {/* Danh sách giọng đã nhân bản */}
+                    {vieneuVoices.some(v => v.isUserVoice) && (
+                      <div className="space-y-1.5 pt-1">
+                        <div className="text-[11px] text-slate-400">Giọng đã nhân bản:</div>
                         <div className="space-y-1 max-h-28 overflow-y-auto pr-1">
-                          {modelInfo.pthFiles.map(file => (
-                            <div
-                              key={file}
-                              className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-[11px] font-mono ${
-                                activeModelName === file
-                                  ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30 font-semibold'
-                                  : 'bg-white/5 text-slate-300 border border-white/5'
-                              }`}
-                            >
-                              <span className="truncate">{file}</span>
-                              {activeModelName === file && (
-                                <span className="text-[9px] px-1.5 py-0.5 bg-amber-500/30 text-amber-200 rounded font-sans shrink-0 ml-2">
-                                  Đang dùng
-                                </span>
-                              )}
-                            </div>
-                          ))}
-                          {modelInfo.indexFiles && modelInfo.indexFiles.length > 0 && (
-                            <div className="pt-1 text-[10px] text-slate-400 flex items-center gap-1">
-                              <span>Index file:</span>
-                              <span className="font-mono text-slate-300 truncate">
-                                {modelInfo.indexFiles.join(', ')}
-                              </span>
-                            </div>
-                          )}
+                          {vieneuVoices
+                            .filter(v => v.isUserVoice)
+                            .map(v => (
+                              <div
+                                key={v.id}
+                                className="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-[11px] font-mono bg-white/5 text-slate-300 border border-white/5"
+                              >
+                                <span className="truncate">{v.id}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteVoice(v.id)}
+                                  className="text-rose-400/80 hover:text-rose-300 text-[10px] ml-2 shrink-0 cursor-pointer"
+                                >
+                                  Xoá
+                                </button>
+                              </div>
+                            ))}
                         </div>
-                      ) : (
-                        <div className="p-2.5 rounded-lg bg-white/5 text-[11px] text-slate-400 italic">
-                          Chưa có model. Thêm model của bạn để bắt đầu dùng giọng đọc riêng.
-                        </div>
-                      )}
-                    </div>
+                      </div>
+                    )}
 
-                    {importFeedback && (
+                    {cloneFeedback && (
                       <div className="text-[11px] text-amber-300/90 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1.5 rounded-lg flex items-center justify-between">
-                        <span>{importFeedback}</span>
+                        <span>{cloneFeedback}</span>
                         <button
                           type="button"
-                          onClick={() => setImportFeedback(null)}
+                          onClick={() => setCloneFeedback(null)}
                           className="text-amber-400 hover:text-white ml-2 text-xs"
                         >
                           ×
@@ -958,13 +1029,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 {/* Pitch Slider */}
                 <div
                   className={`bg-[#16161A] p-3.5 rounded-2xl border border-white/10 space-y-2 relative ${
-                    localSettings.ttsProvider === 'rvc-local' ? 'opacity-60' : ''
+                    localSettings.ttsProvider !== 'browser' ? 'opacity-60' : ''
                   }`}
                 >
                   <div className="flex justify-between items-center text-xs">
                     <span className="font-semibold text-white">Voice Pitch (Tone)</span>
                     <span className="font-mono text-amber-400 font-bold">
-                      {localSettings.ttsProvider === 'rvc-local' ? 'Cố định' : localSettings.pitch}
+                      {localSettings.ttsProvider !== 'browser' ? 'Cố định' : localSettings.pitch}
                     </span>
                   </div>
                   <input
@@ -973,7 +1044,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     min={0.5}
                     max={2.0}
                     step={0.1}
-                    disabled={localSettings.ttsProvider === 'rvc-local'}
+                    disabled={localSettings.ttsProvider !== 'browser'}
                     value={localSettings.pitch}
                     onChange={e =>
                       setLocalSettings({ ...localSettings, pitch: parseFloat(e.target.value) })
@@ -985,9 +1056,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <span>1.0 Normal</span>
                     <span>2.0 High</span>
                   </div>
-                  {localSettings.ttsProvider === 'rvc-local' && (
+                  {localSettings.ttsProvider !== 'browser' && (
                     <div className="text-[10px] text-amber-400/80 font-sans">
-                      * Cao độ được cố định theo mô hình RVC đã train.
+                      * Edge TTS/VieNeu-TTS tự điều chỉnh cao độ giọng, chưa hỗ trợ tùy chỉnh thủ công.
                     </div>
                   )}
                 </div>
