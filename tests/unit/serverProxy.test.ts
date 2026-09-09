@@ -55,50 +55,6 @@ describe('Gemini Express Proxy (server.js)', () => {
     expect(typeof body.geminiConfigured).toBe('boolean');
     expect(typeof body.timestamp).toBe('string');
   });
-
-  it('POST /api/generate rejects empty or missing prompt with HTTP 400 when key is configured', async () => {
-    process.env.GEMINI_API_KEY = 'test_mock_api_key';
-
-    const res = await fetch(`${baseUrl}/api/generate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({}),
-    });
-
-    expect(res.status).toBe(400);
-    const body = await res.json();
-    expect(body.ok).toBe(false);
-    expect(body.error).toContain('prompt');
-  });
-
-  it('POST /api/generate rejects non-string prompt with HTTP 400 when key is configured', async () => {
-    process.env.GEMINI_API_KEY = 'test_mock_api_key';
-
-    const res = await fetch(`${baseUrl}/api/generate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt: 12345 }),
-    });
-
-    expect(res.status).toBe(400);
-    const body = await res.json();
-    expect(body.ok).toBe(false);
-  });
-
-  it('POST /api/generate returns HTTP 503 when GEMINI_API_KEY is unconfigured', async () => {
-    delete process.env.GEMINI_API_KEY;
-
-    const res = await fetch(`${baseUrl}/api/generate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt: 'Tóm tắt bài văn này.' }),
-    });
-
-    expect(res.status).toBe(503);
-    const body = await res.json();
-    expect(body.ok).toBe(false);
-    expect(body.error).toContain('GEMINI_API_KEY is not configured');
-  });
 });
 
 describe('POST /api/speak/edge (Microsoft Edge TTS, feature 048-desktop-tts-migration)', () => {

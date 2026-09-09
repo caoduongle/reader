@@ -20,7 +20,6 @@ import {
 } from './server/middleware/rateLimiter.js';
 import { validateBody } from './server/middleware/validate.js';
 import {
-  generateSchema,
   fetchUrlSchema,
   ocrSchema,
   speakEdgeSchema,
@@ -159,42 +158,6 @@ app.post(
       if (tmpDir) {
         await rm(tmpDir, { recursive: true, force: true }).catch(() => {});
       }
-    }
-  }
-);
-
-// Secure proxy generation endpoint (FR-006, FR-011, FR-014)
-app.post(
-  '/api/generate',
-  aiRateLimiter,
-  validateBody(generateSchema),
-  async (req, res, next) => {
-    const rawKey = process.env.GEMINI_API_KEY;
-    if (!rawKey || rawKey.trim() === '' || rawKey === 'MY_GEMINI_API_KEY') {
-      return res.status(503).json({
-        ok: false,
-        error:
-          'GEMINI_API_KEY is not configured on server. Please add a valid key to your local .env file.',
-      });
-    }
-
-    const { prompt, model = 'gemini-2.5-flash', systemInstruction } = req.body;
-
-    try {
-      const ai = new GoogleGenAI({ apiKey: rawKey.trim() });
-      const response = await ai.models.generateContent({
-        model,
-        contents: prompt,
-        config: systemInstruction ? { systemInstruction } : undefined,
-      });
-
-      res.json({
-        ok: true,
-        text: response.text,
-        modelUsed: model,
-      });
-    } catch (error) {
-      next(error);
     }
   }
 );
