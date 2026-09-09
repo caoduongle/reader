@@ -8,8 +8,8 @@ Tài liệu này quy định các tiêu chuẩn an toàn, chính sách bảo m�
 
 Ứng dụng VoxRead tích hợp các microservices cục bộ chạy trên máy tính người dùng:
 
-- **Server RVC TTS local** (`python-backend/server.py` — cổng mặc định `8008`).
-- **Server Proxy Gemini API** (`server.js` — cổng mặc định `3001`).
+- **Server VieNeu-TTS local** (`python-backend/server.py` — cổng mặc định `8008`).
+- **Server Proxy Node** (`server.js` — cổng mặc định `3001` — Edge TTS, Gemini OCR/URL).
 
 ### ⚠️ Cảnh báo an toàn mạng:
 

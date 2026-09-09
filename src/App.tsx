@@ -211,9 +211,9 @@ export default function App() {
     handleChapterComplete
   );
 
-  // Surface RVC server error toast during reading if Settings modal is closed
+  // Surface server-side TTS error toast (Edge TTS / VieNeu-TTS) during reading if Settings modal is closed
   useEffect(() => {
-    if (serverErrorMessage && !isSettingsOpen && settings.ttsProvider === 'rvc-local') {
+    if (serverErrorMessage && !isSettingsOpen && settings.ttsProvider !== 'browser') {
       showToast(serverErrorMessage);
     }
   }, [serverErrorMessage, isSettingsOpen, settings.ttsProvider, showToast]);

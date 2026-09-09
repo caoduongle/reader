@@ -102,7 +102,7 @@ def _friendly_init_error() -> str:
 # ============================================================
 #  Luu tru giong da nhan ban (thay the model/*.pth + *.index cua RVC)
 #
-#  Khac voi rvc-python (bat buoc train qua Colab, xem docs/rvc-voice-setup.md
+#  Khac voi rvc-python (bat buoc train qua Colab, xem docs/voice-setup.md
 #  cu), VieNeu nhan ban tuc thi tu 1 clip tham chieu ngan qua tts.add_voice(),
 #  khong can train. Ham tts.save_voices() co san trong thu vien ghi de len file
 #  preset GOC nam trong site-packages (se mat khi nang cap thu vien - xem canh
@@ -277,7 +277,7 @@ def list_voices():
 @app.route("/voices/add", methods=["POST", "OPTIONS"])
 def add_voice():
     """Nhan ban giong tuc thi tu 1 clip tham chieu 3-8 giay - KHONG can train.
-    Thay the hoan toan quy trinh train RVC qua Google Colab (docs/rvc-voice-setup.md cu)."""
+    Thay the hoan toan quy trinh train RVC qua Google Colab (xem docs/voice-setup.md)."""
     if request.method == "OPTIONS":
         return Response(status=204)
 

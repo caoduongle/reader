@@ -49,7 +49,10 @@ describe('XSS Defense & Client Sanitization (FR-007, FR-008)', () => {
 
     const mockSettings: TTSSettings = {
       ttsProvider: 'browser',
-      rvcServerUrl: 'http://127.0.0.1:8008',
+      edgeTtsProxyUrl: 'http://127.0.0.1:3001',
+      edgeVoiceId: 'vi-VN-HoaiMyNeural',
+      vieneuServerUrl: 'http://127.0.0.1:8008',
+      vieneuVoiceId: '',
       voiceURI: 'vi-VN-Standard-A',
       rate: 1.0,
       pitch: 1.0,

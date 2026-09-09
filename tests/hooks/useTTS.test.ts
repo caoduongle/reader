@@ -86,7 +86,7 @@ describe('useTTS hook race condition guards & loaded audio index', () => {
     const mainAudio = audioInstances[0];
     expect(mainAudio).toBeDefined();
 
-    // Trigger playback of sentence 0 (RVC fetch starts)
+    // Trigger playback of sentence 0 (server-side fetch starts)
     act(() => {
       result.current.play(0);
     });
@@ -375,7 +375,7 @@ describe('useTTS hook race condition guards & loaded audio index', () => {
     expect(mainAudio.src).toBe('');
   });
 
-  it('sets isBuffering to true during RVC fetch and reverts to false once audio.src is configured', async () => {
+  it('sets isBuffering to true during server-side fetch and reverts to false once audio.src is configured', async () => {
     let resolveFetch: (value: Response) => void;
     const fetchPromise = new Promise<Response>(resolve => {
       resolveFetch = resolve;
@@ -418,7 +418,7 @@ describe('useTTS hook race condition guards & loaded audio index', () => {
     expect(mainAudio.src).toContain('blob:mock-audio');
   });
 
-  it('resets isBuffering to false when RVC fetch fails', async () => {
+  it('resets isBuffering to false when server-side fetch fails', async () => {
     let resolveFetch: (value: Response) => void;
     const fetchPromise = new Promise<Response>(resolve => {
       resolveFetch = resolve;
@@ -698,7 +698,7 @@ describe('useTTS hook race condition guards & loaded audio index', () => {
     expect(result.current.isPlaying).toBe(false);
   });
 
-  describe('fetchRVCSpeech transient network retry (feature 046)', () => {
+  describe('fetchServerSpeech transient network retry (feature 046)', () => {
     it('retries once on transient HTTP 500 error after 400ms and succeeds on second attempt', async () => {
       let speakCallCount = 0;
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -799,7 +799,7 @@ describe('useTTS hook race condition guards & loaded audio index', () => {
           return Promise.resolve({
             ok: false,
             status: 503,
-            json: async () => ({ error: 'RVC model not loaded' }),
+            json: async () => ({ error: 'VieNeu model not loaded' }),
           } as unknown as Response);
         }
         return Promise.resolve({ ok: true });
@@ -819,7 +819,7 @@ describe('useTTS hook race condition guards & loaded audio index', () => {
       const speakCalls = mockFetch.mock.calls.filter(call => call[0].includes('/speak'));
       expect(speakCalls.length).toBe(1);
       expect(result.current.isPlaying).toBe(false);
-      expect(result.current.serverErrorMessage).toBe('RVC model not loaded');
+      expect(result.current.serverErrorMessage).toBe('VieNeu model not loaded');
     });
 
     it('does NOT retry if user stops/aborts during 400ms delay', async () => {
@@ -905,7 +905,7 @@ describe('useTTS hook race condition guards & loaded audio index', () => {
     });
   });
 
-  describe('fetchRVCSpeech 20s client-side timeout (feature 047)', () => {
+  describe('fetchServerSpeech 20s client-side timeout (feature 047)', () => {
     it('automatically aborts hanging speech fetch after 20,000ms timeout and resets playback', async () => {
       vi.useFakeTimers();
       let capturedSignal: AbortSignal | null = null;
@@ -1001,7 +1001,7 @@ describe('useTTS hook race condition guards & loaded audio index', () => {
 
       renderHook(() => useTTS(sampleSentences));
 
-      // After mount, checkRVCServerHealth triggers on /health
+      // After mount, checkTTSServerHealth triggers on /health
       expect(healthSignal).toBeDefined();
       expect(healthSignal!.aborted).toBe(false);
 
