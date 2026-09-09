@@ -171,50 +171,14 @@ else {
     Write-Success "Virtualenv da ton tai san tai $VenvDir"
 }
 
-# Kiem tra va cai dat fairseq tu wheel vendor san neu co (tranh yeu cau Visual C++ Build Tools)
-$WheelsDir = Join-Path $BackendDir "wheels"
-$pyVerOut = (& $VenvPython -c "import sys; print(sys.version_info[0], sys.version_info[1])").Trim()
-$pyVerParts = $pyVerOut.Split(' ')
-$pyMajor = $pyVerParts[0]
-$pyMinor = $pyVerParts[1]
-$pyTag = "cp$pyMajor$pyMinor"
-$WheelPattern = "fairseq-*$pyTag*win_amd64.whl"
-$MatchingWheels = @()
-
-if (Test-Path $WheelsDir) {
-    $MatchingWheels = @(Get-ChildItem -Path $WheelsDir -Filter $WheelPattern -File -ErrorAction SilentlyContinue)
-}
-
-if ($MatchingWheels.Count -gt 0) {
-    $TargetWheel = $MatchingWheels[0]
-    Write-Host "Tim thay pre-built wheel cho fairseq (Python $pyMajor.$pyMinor $pyTag win_amd64): $($TargetWheel.Name)" -ForegroundColor Cyan
-    Write-Host "Dang cai dat fairseq tu local wheel (khong can Visual C++ Build Tools)..." -ForegroundColor Yellow
-    & $VenvPip install $TargetWheel.FullName
-    if ($LASTEXITCODE -ne 0) {
-        Write-Fail "Cai dat fairseq wheel that bai voi ma loi $LASTEXITCODE."
-    }
-    Write-Success "Cai dat fairseq wheel thanh cong!"
-}
-else {
-    Write-Host ""
-    Write-Host "[CANH BAO] Khong tim thay pre-built wheel fairseq cho Python $pyMajor.$pyMinor ($pyTag) win_amd64 trong $WheelsDir" -ForegroundColor Yellow
-    Write-Host "pip se co gang build fairseq tu source tu PyPI." -ForegroundColor Yellow
-    Write-Host "Luu y: Qua trinh nay yeu cau may tinh phai cai dat Visual C++ Build Tools:" -ForegroundColor Yellow
-    Write-Host "  -> https://visualstudio.microsoft.com/visual-cpp-build-tools/" -ForegroundColor White
-    Write-Host "Hoac xem huong dan build lai wheel tai: python-backend/wheels/README.md" -ForegroundColor White
-    Write-Host ""
-}
-
+# Cai dat thu vien Python (feature 048-desktop-tts-migration: chi con flask + vieneu,
+# khong con can fairseq/PyTorch bat buoc nhu RVC truoc day - vieneu mac dinh chay
+# ONNX Runtime tren CPU, khong can Visual C++ Build Tools hay GPU).
 if (Test-Path $RequirementsFile) {
     Write-Host "Dang kiem tra va cai dat packages tu requirements.txt..." -ForegroundColor Yellow
     & $VenvPython -m pip install "pip<24.1" --quiet
     & $VenvPip install -r $RequirementsFile
     if ($LASTEXITCODE -ne 0) {
-        Write-Host ""
-        Write-Host "[GOI Y] Neu gap loi build C++ ('Microsoft Visual C++ 14.0 is required' khi build fairseq)," -ForegroundColor Yellow
-        Write-Host "ban can cai dat Visual C++ Build Tools tai: https://visualstudio.microsoft.com/visual-cpp-build-tools/" -ForegroundColor Yellow
-        Write-Host "Hoac kiem tra lai file wheel trong python-backend/wheels/" -ForegroundColor Yellow
-        Write-Host ""
         Write-Fail "Cai dat python packages that bai voi ma loi $LASTEXITCODE."
     }
     Write-Success "Cai dat thu vien Python thanh cong!"
@@ -223,41 +187,8 @@ else {
     Write-Host "[CANH BAO] Khong tim thay $RequirementsFile, bo qua buoc pip install." -ForegroundColor Yellow
 }
 
-# Kiem tra GPU NVIDIA va tu dong cai dat PyTorch ho tro CUDA
-Write-Host ""
-Write-Host "Dang kiem tra phan cung GPU NVIDIA..." -ForegroundColor Yellow
-$hasNvidiaGpu = $false
-try {
-    $nvidiaSmiCmd = Get-Command nvidia-smi -ErrorAction SilentlyContinue
-    if ($nvidiaSmiCmd) {
-        $null = & nvidia-smi 2>&1
-        if ($LASTEXITCODE -eq 0) {
-            $hasNvidiaGpu = $true
-        }
-    }
-}
-catch {
-    $hasNvidiaGpu = $false
-}
-
-if ($hasNvidiaGpu) {
-    Write-Host "Phat hien GPU NVIDIA! Dang tu dong cai dat PyTorch ho tro CUDA (cu118)..." -ForegroundColor Cyan
-    & $VenvPip install torch==2.1.1+cu118 torchaudio==2.1.1+cu118 --index-url https://download.pytorch.org/whl/cu118
-    if ($LASTEXITCODE -eq 0) {
-        Write-Success "Phat hien GPU NVIDIA! Da tu dong cai dat PyTorch CUDA (cu118)."
-    }
-    else {
-        Write-Host ""
-        Write-Host "[CANH BAO] Khong the tu dong cai dat PyTorch CUDA. Ban co the thu lai thu cong:" -ForegroundColor Yellow
-        Write-Host "  pip install torch==2.1.1+cu118 torchaudio==2.1.1+cu118 --index-url https://download.pytorch.org/whl/cu118" -ForegroundColor White
-        Write-Host "Hoac xem huong dan tai: docs/rvc-voice-setup.md" -ForegroundColor White
-        Write-Host ""
-    }
-}
-else {
-    Write-Host ""
-    Write-Host "[CANH BAO] Khong phat hien GPU NVIDIA - tiep tuc dung PyTorch CPU. (Neu co GPU roi, xem huong dan tai docs/rvc-voice-setup.md)" -ForegroundColor Yellow
-}
+# Tang toc GPU cho VieNeu-TTS la TUY CHON, khong bat buoc (khac RVC truoc day).
+# Neu muon, tu chay: pip install "vieneu[cuda]" trong venv.
 
 # ------------------------------------------------------------------------------
 # Hoan tat
@@ -274,7 +205,7 @@ Write-Host ""
 Write-Host "  2. Chay ban Desktop Windows (Electron):" -ForegroundColor White
 Write-Host "     npm run electron:dev" -ForegroundColor Yellow
 Write-Host ""
-Write-Host "  3. Chay server RVC backend thu cong (neu can test rieng):" -ForegroundColor White
+Write-Host "  3. Chay server VieNeu-TTS backend thu cong (neu can test rieng):" -ForegroundColor White
 Write-Host "     cd python-backend" -ForegroundColor Yellow
 Write-Host "     venv\Scripts\activate" -ForegroundColor Yellow
 Write-Host "     python server.py" -ForegroundColor Yellow

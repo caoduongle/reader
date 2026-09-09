@@ -133,13 +133,13 @@ else
     success "Virtualenv đã tồn tại sẵn tại ${VENV_DIR}"
 fi
 
-# Lưu ý: Các file wheel binary trong python-backend/wheels/ chỉ dành riêng cho Windows (win_amd64).
-# Trên Linux / macOS, pip cài đặt fairseq trực tiếp từ PyPI bằng compiler có sẵn (build-essential / clang).
+# Feature 048-desktop-tts-migration: chi con flask + vieneu trong requirements.txt,
+# khong con can fairseq/PyTorch bat buoc nhu RVC truoc day - vieneu mac dinh chay
+# ONNX Runtime tren CPU.
 if [ -f "${REQUIREMENTS_FILE}" ]; then
     echo -e "${YELLOW}Đang kiểm tra và cài đặt packages từ requirements.txt...${NC}"
     "${VENV_PYTHON}" -m pip install "pip<24.1" --quiet
     if ! "${VENV_PIP}" install -r "${REQUIREMENTS_FILE}"; then
-        echo -e "\n${YELLOW}[GỢI Ý] Nếu gặp lỗi build C++ (ví dụ khi compile fairseq), hãy cài đặt build-essential hoặc python3-dev.${NC}"
         fail "Cài đặt python packages thất bại."
     fi
     success "Cài đặt thư viện Python thành công!"
@@ -147,20 +147,8 @@ else
     echo -e "${YELLOW}[CẢNH BÁO] Không tìm thấy ${REQUIREMENTS_FILE}, bỏ qua bước pip install.${NC}"
 fi
 
-# Kiểm tra GPU NVIDIA và tự động cài đặt PyTorch hỗ trợ CUDA
-echo -e "\n${YELLOW}Đang kiểm tra phần cứng GPU NVIDIA...${NC}"
-if command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi >/dev/null 2>&1; then
-    echo -e "${CYAN}Phát hiện GPU NVIDIA! Đang tự động cài đặt PyTorch hỗ trợ CUDA (cu118)...${NC}"
-    if "${VENV_PIP}" install torch==2.1.1+cu118 torchaudio==2.1.1+cu118 --index-url https://download.pytorch.org/whl/cu118; then
-        success "Phát hiện GPU NVIDIA! Đã tự động cài đặt PyTorch CUDA (cu118)."
-    else
-        echo -e "\n${YELLOW}[CẢNH BÁO] Không thể cài đặt PyTorch CUDA tự động. Bạn có thể thử lại thủ công:"
-        echo -e "  pip install torch==2.1.1+cu118 torchaudio==2.1.1+cu118 --index-url https://download.pytorch.org/whl/cu118"
-        echo -e "Hoặc xem hướng dẫn tại: docs/rvc-voice-setup.md${NC}\n"
-    fi
-else
-    echo -e "\n${YELLOW}[CẢNH BÁO] Không phát hiện GPU NVIDIA — tiếp tục dùng PyTorch CPU. (Nếu có GPU rời, xem hướng dẫn tại docs/rvc-voice-setup.md)${NC}"
-fi
+# Tăng tốc GPU cho VieNeu-TTS là TUỲ CHỌN, không bắt buộc (khác RVC trước đây).
+# Nếu muốn, tự chạy: pip install "vieneu[cuda]" trong venv.
 
 # ------------------------------------------------------------------------------
 # Hoàn tất
@@ -173,7 +161,7 @@ echo -e "  1. Chạy bản Web (trình duyệt):"
 echo -e "     ${YELLOW}npm run dev${NC}\n"
 echo -e "  2. Chạy bản Desktop Electron:"
 echo -e "     ${YELLOW}npm run electron:dev${NC}\n"
-echo -e "  3. Chạy server RVC backend thủ công (nếu cần test riêng):"
+echo -e "  3. Chạy server VieNeu-TTS backend thủ công (nếu cần test riêng):"
 echo -e "     ${YELLOW}cd python-backend${NC}"
 echo -e "     ${YELLOW}source venv/bin/activate${NC}"
 echo -e "     ${YELLOW}python server.py${NC}\n"
