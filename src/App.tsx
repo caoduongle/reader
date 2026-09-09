@@ -7,8 +7,6 @@ import { ReaderNavbar } from './components/ReaderNavbar';
 import { ReaderContent } from './components/ReaderContent';
 import { ControlBar } from './components/ControlBar';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { useDocumentSEO } from './hooks/useDocumentSEO';
-import { SITE_CONFIG } from './utils/siteConfig';
 
 const MascotWidget = React.lazy(() => import('./components/MascotWidget'));
 const UploadModal = React.lazy(() => import('./components/UploadModal'));
@@ -17,7 +15,6 @@ const SearchDrawer = React.lazy(() => import('./components/SearchDrawer'));
 const BookmarksDrawer = React.lazy(() => import('./components/BookmarksDrawer'));
 const SettingsModal = React.lazy(() => import('./components/SettingsModal'));
 const ReadingStatsModal = React.lazy(() => import('./components/ReadingStatsModal'));
-const NotFoundPage = React.lazy(() => import('./components/NotFoundPage'));
 import { useReadingStats } from './hooks/useReadingStats';
 import { THEMES } from './utils/themeStyles';
 import { ScanText } from 'lucide-react';
@@ -43,22 +40,6 @@ export default function App() {
   const [pendingAutoPlay, setPendingAutoPlay] = useState<boolean>(false);
   const [showScreenReaderGuide, setShowScreenReaderGuide] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-
-  // Check if current URL path is a non-root route (404 state)
-  const [isNotFound, setIsNotFound] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
-    const pathname = window.location.pathname;
-    return pathname !== '/' && pathname !== '' && !pathname.endsWith('/index.html');
-  });
-
-  useEffect(() => {
-    const handlePopState = () => {
-      const pathname = window.location.pathname;
-      setIsNotFound(pathname !== '/' && pathname !== '' && !pathname.endsWith('/index.html'));
-    };
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
 
   const showToast = useCallback((msg: string) => {
     setToastMessage(msg);
@@ -258,26 +239,6 @@ export default function App() {
     showToast(`Đã nạp thành công: "${newDoc.title}"`);
   };
 
-  // Dynamically synchronize SEO metadata (title, description, canonical link, Open Graph)
-  const activeChapterTitle = currentChapter?.title;
-  const seoTitle = isNotFound
-    ? '404 - Không tìm thấy trang'
-    : currentDocument
-    ? `${currentDocument.title}${activeChapterTitle ? ` - ${activeChapterTitle}` : ''}`
-    : SITE_CONFIG.defaultTitle;
-
-  const seoDescription = isNotFound
-    ? 'Trang bạn đang tìm kiếm không tồn tại hoặc đã bị di chuyển.'
-    : currentDocument
-    ? `Đọc và nghe tác phẩm ${currentDocument.title} với giọng đọc AI truyền cảm, hỗ trợ điều chỉnh tốc độ, cao độ trên VoxRead.`
-    : SITE_CONFIG.defaultDescription;
-
-  useDocumentSEO({
-    title: seoTitle,
-    description: seoDescription,
-    canonicalPath: isNotFound ? (typeof window !== 'undefined' ? window.location.pathname : '/') : '/',
-  });
-
   // Switch chapter
   const handleSelectChapter = (chapterIdx: number) => {
     stop();
@@ -474,21 +435,6 @@ export default function App() {
     updateSettings,
     showToast,
   ]);
-
-  if (isNotFound) {
-    return (
-      <React.Suspense fallback={<div className="min-h-screen bg-[#0E0E10]" />}>
-        <NotFoundPage
-          onReturnHome={() => {
-            if (typeof window !== 'undefined') {
-              window.history.pushState({}, '', '/');
-            }
-            setIsNotFound(false);
-          }}
-        />
-      </React.Suspense>
-    );
-  }
 
   const themeConfig = THEMES[settings.theme] || THEMES.dark;
 
