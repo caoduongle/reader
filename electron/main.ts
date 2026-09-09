@@ -45,8 +45,8 @@ if (!gotTheLock) {
     // 4. Register global shortcut for Screen Reader
     registerScreenReaderShortcut();
 
-    // 5. Register RVC Model management IPC handlers
-    registerModelIpcHandlers();
+    // 5. Register voice-clone IPC handler (VieNeu-TTS)
+    registerVoiceCloneIpcHandlers();
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) {
@@ -96,7 +96,7 @@ async function startPythonBackend(): Promise<void> {
     showPrerequisiteWarning(
       'Chưa tìm thấy môi trường Python (python-backend/venv) hoặc server.py.\n\n' +
         'Bạn vẫn có thể sử dụng VoxRead với "Giọng máy (mặc định)".\n' +
-        'Để dùng "Giọng của tôi (RVC local)", vui lòng cài đặt venv và model theo hướng dẫn.'
+        'Để dùng "VieNeu-TTS", vui lòng cài đặt venv Python theo hướng dẫn.'
     );
     return;
   }
@@ -337,7 +337,7 @@ function createSystemTray(): void {
   // 16x16 icon bitmap for tray
   const icon = nativeImage.createEmpty();
   tray = new Tray(icon);
-  tray.setToolTip('VoxRead - Trình đọc sách & Giọng nói RVC');
+  tray.setToolTip('VoxRead - Trình đọc sách & Giọng nói AI');
 
   const contextMenu = Menu.buildFromTemplate([
     {
@@ -431,7 +431,7 @@ async function handleScreenReaderShortcut(): Promise<void> {
         message: 'Tính năng nhận diện văn bản từ màn hình yêu cầu Google Gemini API Key',
         detail:
           'Tính năng nhận diện chữ từ vùng màn hình (OCR) yêu cầu cấu hình GEMINI_API_KEY trong file .env và kết nối Internet.\n\n' +
-          '(Lưu ý: Tính năng đọc văn bản bôi đen qua Ctrl+C và giọng đọc RVC local vẫn hoạt động offline bình thường).',
+          '(Lưu ý: Tính năng đọc văn bản bôi đen qua Ctrl+C và giọng đọc VieNeu-TTS vẫn hoạt động offline bình thường).',
         buttons: ['Đã hiểu'],
         defaultId: 0,
       });
@@ -558,31 +558,28 @@ function registerScreenReaderShortcut(): void {
 }
 
 /**
- * Register IPC handlers for RVC Voice Model management:
- * - models:get-dir: returns absolute path to python-backend/model
- * - models:open-folder: opens model directory in OS file explorer
- * - models:import: shows native file dialog (.pth, .index) and copies to model directory
+ * Register IPC handler for VieNeu-TTS voice-clone folder access
+ * (feature 048-desktop-tts-migration).
+ *
+ * Unlike the RVC model-management handlers this replaces, there is no
+ * import/copy step here: the renderer uploads the reference audio clip
+ * directly to python-backend via fetch()/FormData (POST /voices/add),
+ * the same way fileParser.ts already reads TXT/EPUB/PDF client-side -
+ * no IPC round-trip needed for that part. The only thing that still
+ * benefits from a native OS dialog is "show me where the cloned voices
+ * are stored", which is what this single handler provides.
  */
-function registerModelIpcHandlers(): void {
-  ipcMain.handle('models:get-dir', async () => {
-    const { baseDir } = getBackendPaths();
-    const modelDir = path.join(baseDir, 'model');
-    if (!fs.existsSync(modelDir)) {
-      fs.mkdirSync(modelDir, { recursive: true });
-    }
-    return modelDir;
-  });
-
-  ipcMain.handle('models:open-folder', async () => {
+function registerVoiceCloneIpcHandlers(): void {
+  ipcMain.handle('voiceClone:open-folder', async () => {
     try {
       const { baseDir } = getBackendPaths();
-      const modelDir = path.join(baseDir, 'model');
-      if (!fs.existsSync(modelDir)) {
-        fs.mkdirSync(modelDir, { recursive: true });
+      const voicesDir = path.join(baseDir, 'voices');
+      if (!fs.existsSync(voicesDir)) {
+        fs.mkdirSync(voicesDir, { recursive: true });
       }
-      const openErr = await shell.openPath(modelDir);
+      const openErr = await shell.openPath(voicesDir);
       if (openErr) {
-        console.warn('Failed to open model directory:', openErr);
+        console.warn('Failed to open voices directory:', openErr);
         return { success: false, error: openErr };
       }
       return { success: true };
@@ -593,70 +590,8 @@ function registerModelIpcHandlers(): void {
       };
     }
   });
-
-  ipcMain.handle('models:import', async () => {
-    try {
-      const { baseDir } = getBackendPaths();
-      const modelDir = path.join(baseDir, 'model');
-      if (!fs.existsSync(modelDir)) {
-        fs.mkdirSync(modelDir, { recursive: true });
-      }
-
-      const dialogOptions = {
-        title: 'Chọn file model giọng RVC (.pth, .index)',
-        properties: ['openFile', 'multiSelections'] as ('openFile' | 'multiSelections')[],
-        filters: [
-          {
-            name: 'RVC Voice Models (*.pth, *.index)',
-            extensions: ['pth', 'index'],
-          },
-          {
-            name: 'Tất cả các file (*.*)',
-            extensions: ['*'],
-          },
-        ],
-      };
-
-      const result = mainWindow
-        ? await dialog.showOpenDialog(mainWindow, dialogOptions)
-        : await dialog.showOpenDialog(dialogOptions);
-
-      if (result.canceled || !result.filePaths || result.filePaths.length === 0) {
-        return { success: false, canceled: true };
-      }
-
-      const importedFiles: string[] = [];
-      for (const filePath of result.filePaths) {
-        const ext = path.extname(filePath).toLowerCase();
-        if (ext !== '.pth' && ext !== '.index') {
-          continue;
-        }
-        const fileName = path.basename(filePath);
-        const destPath = path.join(modelDir, fileName);
-        fs.copyFileSync(filePath, destPath);
-        importedFiles.push(fileName);
-      }
-
-      if (importedFiles.length === 0) {
-        return {
-          success: false,
-          error: 'Chưa có file .pth hoặc .index hợp lệ nào được chọn.',
-        };
-      }
-
-      return {
-        success: true,
-        importedFiles,
-        targetDir: modelDir,
-      };
-    } catch (err) {
-      return {
-        success: false,
-        error: err instanceof Error ? err.message : String(err),
-      };
-    }
-  });
 }
+
 
 /**
  * Terminate child process trees (Python backend and Express proxy) cleanly on Windows

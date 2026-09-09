@@ -16,9 +16,10 @@ contextBridge.exposeInMainWorld('voxreadDesktop', {
       ipcRenderer.removeAllListeners('screen-reader:clipboard-captured');
     },
   },
-  models: {
-    getDir: () => ipcRenderer.invoke('models:get-dir'),
-    openFolder: () => ipcRenderer.invoke('models:open-folder'),
-    importModel: () => ipcRenderer.invoke('models:import'),
+  // Feature 048-desktop-tts-migration: thay the "models" (import .pth/.index cho
+  // RVC) - viec tai audio mau len de nhan ban giong VieNeu gio do renderer tu
+  // goi fetch()/FormData thang toi python-backend, khong can qua IPC nua.
+  voiceClone: {
+    openVoicesFolder: () => ipcRenderer.invoke('voiceClone:open-folder'),
   },
 });
