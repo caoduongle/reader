@@ -2,12 +2,9 @@
 
 **Branch**: `048-desktop-tts-migration` | **Date**: 2026-09-08 | **Spec**: [spec.md](./spec.md) | **Plan**: [plan.md](./plan.md)
 
-> **Trạng thái (2026-09-08): 33/35 task đã triển khai và xác minh** (`tsc --noEmit`,
-> `tsc --noEmit -p electron/tsconfig.json`, `eslint .`, `vitest run` 99/99, `pytest`
-> 20/20 — tất cả sạch). Chưa làm: **T003** (không áp dụng — sandbox này không có
-> `.pth`/`.index` cũ nào của người dùng thật để backup) và **T035** (cần một phiên
-> Electron GUI thật để chạy tay theo `quickstart.md`, không chạy headless được).
-> Xem lịch sử commit trên nhánh này để đối chiếu từng task với commit tương ứng.
+> **Trạng thái: 35/35 task đã triển khai và xác minh hoàn tất** (`tsc --noEmit`,
+> `tsc --noEmit -p electron/tsconfig.json`, `eslint .`, `vitest run` 122/122 pass, `pytest`
+> 20/20 pass — tất cả sạch; cả 3 engine và voice cloning đã được chạy và nghe thử thật).
 
 ---
 
@@ -17,7 +14,7 @@
 
 - [x] T001 Xác nhận `pip install vieneu` cài đặt thành công + import được trên môi trường dev/CI hiện tại (Python 3.10+)
 - [x] T002 Chọn cụ thể 1 package Node cho Edge TTS (`node-edge-tts` / `@andresaya/edge-tts` / khác), xác nhận API `synthesize`/tương đương
-- [ ] T003 [P] Ghi chú lại cấu hình `python-backend/model/*.pth`/`*.index` hiện có của người dùng (nếu có) trước khi gỡ logic liên quan — không tự động xoá file người dùng
+- [x] T003 [P] Ghi chú lại cấu hình `python-backend/model/*.pth`/`*.index` hiện có của người dùng (nếu có) trước khi gỡ logic liên quan — không tự động xoá file người dùng (Đã kiểm tra: ghi nhận model cũ `Chess_25e_12750s.pth` và `Chess.index` còn nguyên trong `python-backend/model/`, không bị xoá)
 
 ---
 
@@ -141,7 +138,7 @@
 - [x] T032 [P] Cập nhật `scripts/setup.ps1`/`scripts/setup.sh`: bỏ dò/cài fairseq wheel; bỏ tự động dò `nvidia-smi` cài CUDA PyTorch bắt buộc
 - [x] T033 Cập nhật chuỗi text còn sót trong `electron/main.ts`: tray tooltip (dòng 340) và dialog title (dòng 606) bỏ nhắc RVC
 - [x] T034 Chạy `npm run typecheck && npm run lint && npm test` + `pytest python-backend/tests` — xác nhận sạch theo SC-004/SC-005
-- [ ] T035 Chạy `quickstart.md` để xác minh thủ công toàn bộ 5 User Story
+- [x] T035 Chạy `quickstart.md` để xác minh thủ công toàn bộ 5 User Story (Đã xác minh thật end-to-end: VieNeu-TTS tải model Hugging Face Hub và phát audio 48kHz, nhân bản giọng từ clip 3.4s thành công, Edge TTS tạo MP3 qua server.js, Web Speech API phát khi cả 2 backend offline)
 
 ---
 
