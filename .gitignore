@@ -60,3 +60,6 @@ python-backend/model/*
 # Package Manager Lockfile Hygiene (Standardized on npm)
 bun.lock
 bun.lockb
+server.py.new
+048-desktop-tts-migration.patch
+CACH-AP-DUNG-PATCH.md

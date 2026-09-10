@@ -95,8 +95,8 @@ async function startPythonBackend(): Promise<void> {
     console.warn('Python executable or server.py not found at:', { pythonExe, serverScript });
     showPrerequisiteWarning(
       'Chưa tìm thấy môi trường Python (python-backend/venv) hoặc server.py.\n\n' +
-        'Bạn vẫn có thể sử dụng VoxRead với "Giọng máy (mặc định)".\n' +
-        'Để dùng "VieNeu-TTS", vui lòng cài đặt venv Python theo hướng dẫn.'
+      'Bạn vẫn có thể sử dụng VoxRead với "Giọng máy (mặc định)".\n' +
+      'Để dùng "VieNeu-TTS", vui lòng cài đặt venv Python theo hướng dẫn.'
     );
     return;
   }
@@ -181,22 +181,14 @@ function showPrerequisiteWarning(
  */
 function getProxyPaths() {
   const isPackaged = app.isPackaged;
-  const scriptCandidate = path.join(app.getAppPath(), 'dist-electron', 'server.cjs');
-  const devFallback = path.join(app.getAppPath(), 'server.js');
-
   let proxyScript = '';
-  if (fs.existsSync(scriptCandidate)) {
-    proxyScript = scriptCandidate;
-  } else if (!isPackaged && fs.existsSync(devFallback)) {
-    proxyScript = devFallback;
+  if (isPackaged) {
+    proxyScript = path.join(app.getAppPath(), 'dist-electron', 'server.cjs');
+  } else {
+    proxyScript = path.join(app.getAppPath(), 'server.js');
   }
-
   const baseDir = isPackaged ? process.resourcesPath : app.getAppPath();
-
-  return {
-    proxyScript,
-    baseDir,
-  };
+  return { proxyScript, baseDir };
 }
 
 /**
@@ -220,7 +212,7 @@ async function startProxyServer(): Promise<void> {
     console.warn('Express proxy script not found at:', proxyScript);
     showPrerequisiteWarning(
       'Không tìm thấy file dịch vụ proxy (server.cjs hoặc server.js).\n\n' +
-        'Tính năng "Đọc từ liên kết" và các tiện ích kết nối có thể không hoạt động.',
+      'Tính năng "Đọc từ liên kết" và các tiện ích kết nối có thể không hoạt động.',
       'Thông báo dịch vụ proxy',
       'Lưu ý về Express Proxy'
     );
@@ -228,11 +220,14 @@ async function startProxyServer(): Promise<void> {
   }
 
   try {
+    const proxyLogPath = path.join(baseDir, 'proxy-server.log');
+    const proxyLogFd = fs.openSync(proxyLogPath, 'w');
     console.log(`Spawning Express proxy: ${process.execPath} ${proxyScript}`);
+    console.log(`[VoxRead] Log server proxy duoc ghi tai: ${proxyLogPath}`);
     proxyProcess = spawn(process.execPath, [proxyScript], {
       cwd: baseDir,
       detached: false,
-      stdio: 'ignore',
+      stdio: ['ignore', proxyLogFd, proxyLogFd],
       env: {
         ...process.env,
         ELECTRON_RUN_AS_NODE: '1',
@@ -243,7 +238,7 @@ async function startProxyServer(): Promise<void> {
       console.error('Failed to spawn Express proxy process:', err);
       showPrerequisiteWarning(
         `Không thể khởi động dịch vụ proxy: ${err.message}\n\n` +
-          'Tính năng "Đọc từ liên kết" có thể không hoạt động.',
+        'Tính năng "Đọc từ liên kết" có thể không hoạt động.',
         'Lỗi khởi chạy proxy',
         'Không thể khởi động dịch vụ nền'
       );
@@ -252,6 +247,11 @@ async function startProxyServer(): Promise<void> {
     proxyProcess.on('exit', (code, signal) => {
       console.log(`Express proxy process exited with code ${code}, signal ${signal}`);
       proxyProcess = null;
+      try {
+        fs.closeSync(proxyLogFd);
+      } catch {
+        // fd co the da duoc he thong tu dong dong, bo qua loi neu co
+      }
     });
 
     // Poll health endpoint
@@ -548,7 +548,7 @@ function registerScreenReaderShortcut(): void {
     console.warn(`Failed to register global shortcut: ${shortcutKey}`);
     showPrerequisiteWarning(
       'Không thể đăng ký phím tắt toàn cục "Ctrl+Shift+Space" (hoặc Cmd+Shift+Space).\n\n' +
-        'Phím tắt này có thể đang bị ứng dụng khác trong hệ thống chiếm giữ. Bạn vẫn có thể sử dụng các phương thức đọc khác của VoxRead bình thường.',
+      'Phím tắt này có thể đang bị ứng dụng khác trong hệ thống chiếm giữ. Bạn vẫn có thể sử dụng các phương thức đọc khác của VoxRead bình thường.',
       'Cảnh báo phím tắt VoxRead',
       'Xung đột phím tắt toàn cục'
     );
