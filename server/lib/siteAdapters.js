@@ -23,10 +23,15 @@ export const ADAPTERS = [
     id: 'docln-hako',
     // docln.sbs / docln.net / ln.hako.vn are the same "Hako" light-novel
     // platform under different domains (it rotates domains periodically).
-    // Its chapter body is hydrated client-side, so this adapter is mainly
-    // useful *after* lib/renderPage.js has produced rendered HTML.
+    // Its chapter body is NOT plain hydrated-client-side HTML — the real
+    // text ships obfuscated inside #chapter-c-protected in the *first*
+    // static response, and preprocessDocument (unprotectHakoContent, below)
+    // decodes it before any selector below ever runs. requiresRender is
+    // kept only as a safety-net label in case the site changes its
+    // obfuscation scheme again and the decode below silently no-ops.
     hostnames: [/(^|\.)docln\.(sbs|net)$/i, /(^|\.)ln\.hako\.(vn|re)$/i],
     requiresRender: true,
+    preprocessDocument: unprotectHakoContent,
     contentSelectors: ['#chapter-content', '.chapter-content', '[id^="chapter-content"]'],
     removeSelectors: [
       'script',
@@ -127,4 +132,110 @@ export function extractWithAdapter(document, adapter, minLength = 100) {
   }
 
   return null;
+}
+
+/**
+ * Decodes Hako/DocLN's "protected" chapter-content placeholder back into
+ * real HTML, in place, on a JSDOM document.
+ *
+ * docln.sbs / docln.net / ln.hako.vn no longer put chapter text directly
+ * under #chapter-content. They nest a
+ * `<div id="chapter-c-protected" data-s="..." data-k="..." data-c="[...]">`
+ * placeholder inside it instead. `data-c` is a JSON array of string chunks;
+ * each chunk starts with a 4-digit numeric prefix (the chunks don't arrive
+ * in order — the prefix is what you sort by) followed by a base64 payload
+ * that — depending on `data-s` — may additionally be reversed
+ * ("base64_reverse") or XOR'd byte-for-byte against the repeating `data-k`
+ * key ("xor_shuffle") before/after the base64 step. The site's own
+ * front-end JS decodes this client-side to populate the reader (including
+ * its own built-in "Text-to-Speech" experiment); a plain fetch never runs
+ * that script, so every downstream extraction pass — adapter selectors,
+ * Readability, even the AI fallback — was working from a near-empty shell
+ * for this site specifically.
+ *
+ * This re-implements the same three strategies already reverse-engineered,
+ * independently of each other, by two current open-source projects that
+ * target this exact site:
+ *   - https://github.com/tachibana-shin/hako-epub-extension (registry/hako.ts)
+ *   - https://github.com/AzenKain/EPUB-Forge (extensions/origin/hako2epub.js)
+ * Both landing on the same data-s/data-k/data-c shape independently is
+ * good cross-confirmation this is docln's actual current scheme.
+ *
+ * Crucially, no live JavaScript execution is required: the encoded text is
+ * already sitting in the very first static HTML response, so this can (and
+ * should) run on the fast safeFetchHtml() path — no need to reach for the
+ * much slower/heavier headless-render fallback for this site at all,
+ * unless docln changes the scheme again and this quietly starts no-op'ing.
+ *
+ * Mutates `document` in place. Safe no-op if no protected block is found
+ * or a payload doesn't parse, so it's fine to call unconditionally ahead
+ * of any extraction step.
+ *
+ * @param {Document} document A JSDOM document.
+ * @returns {number} Number of protected blocks successfully decoded.
+ */
+export function unprotectHakoContent(document) {
+  let decodedCount = 0;
+  if (!document || typeof document.querySelectorAll !== 'function') return decodedCount;
+
+  const protectedEls = document.querySelectorAll('#chapter-c-protected, [id^="chapter-c-protected"]');
+
+  protectedEls.forEach(el => {
+    try {
+      const strategy = el.getAttribute('data-s') || 'none';
+      const key = el.getAttribute('data-k') || '';
+      const rawChunks = el.getAttribute('data-c');
+      if (!rawChunks) return;
+
+      const chunks = JSON.parse(rawChunks);
+      if (!Array.isArray(chunks) || chunks.length === 0) return;
+
+      const ordered = [...chunks].sort(
+        (a, b) => parseInt(String(a).slice(0, 4), 10) - parseInt(String(b).slice(0, 4), 10)
+      );
+
+      const decodedHtml = ordered
+        .map(chunk => decodeHakoChunk(String(chunk).slice(4), strategy, key))
+        .join('')
+        // Translator footnote markers are meaningless as bare text without
+        // the site's own footnote popover — strip them rather than have
+        // the TTS voice read "[note3]" aloud mid-sentence.
+        .replace(/\[note\d+\]/gi, '');
+
+      if (!decodedHtml) return;
+
+      const wrapper = document.createElement('div');
+      wrapper.innerHTML = decodedHtml;
+      el.replaceWith(...Array.from(wrapper.childNodes));
+      decodedCount += 1;
+    } catch {
+      // Unknown/malformed payload (site changed its scheme again) — leave
+      // the element as-is; Readability/headless-render/AI fallbacks in
+      // server.js still get a chance to handle it.
+    }
+  });
+
+  return decodedCount;
+}
+
+/**
+ * @param {string} payload base64 chunk payload with its 4-digit sort prefix already stripped.
+ * @param {string} strategy 'none' | 'base64_reverse' | 'xor_shuffle'
+ * @param {string} key XOR key, only used when strategy === 'xor_shuffle'.
+ * @returns {string}
+ */
+function decodeHakoChunk(payload, strategy, key) {
+  const prepared = strategy === 'base64_reverse' ? payload.split('').reverse().join('') : payload;
+  const bytes = Buffer.from(prepared, 'base64');
+
+  if (strategy === 'xor_shuffle') {
+    if (!key) return '';
+    const out = Buffer.alloc(bytes.length);
+    for (let i = 0; i < bytes.length; i++) {
+      out[i] = bytes[i] ^ key.charCodeAt(i % key.length);
+    }
+    return out.toString('utf-8');
+  }
+
+  return bytes.toString('utf-8');
 }

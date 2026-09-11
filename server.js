@@ -177,6 +177,13 @@ function processHtml(html, finalUrl, adapter) {
   const dom = new JSDOM(html, { url: finalUrl });
   const document = dom.window.document;
 
+  // Site-specific DOM fixups (e.g. decoding docln/Hako's obfuscated
+  // #chapter-c-protected placeholder back into real HTML — see
+  // unprotectHakoContent in siteAdapters.js) must run before anything else
+  // touches the document, including next-chapter link discovery and
+  // Readability, so both see the real content instead of an empty shell.
+  adapter?.preprocessDocument?.(document);
+
   // Must run before any extraction step, since Readability.parse() mutates
   // the document it's given (removes scripts/"unlikely" nodes in place).
   const nextChapterUrl = findNextChapterUrl(document, finalUrl, adapter);

@@ -1,0 +1,266 @@
+diff --git a/README.md b/README.md
+index d2b1b57..b0b36c2 100644
+--- a/README.md
++++ b/README.md
+@@ -180,7 +180,7 @@ Hai dịch vụ backend chạy cục bộ (loopback), được Electron tự kh
+ 2. **`server.js` (cổng 3001)** — Express:
+    - `/api/speak/edge`: tổng hợp giọng Microsoft Edge TTS trực tiếp (`node-edge-tts`), không qua Python.
+    - `/api/ocr`: nhận diện chữ từ ảnh chụp màn hình bằng Gemini Vision, kèm xác thực magic bytes.
+-   - `/api/fetch-url`: trích xuất nội dung văn bản từ URL, chống SSRF (`lib/ssrfGuard.js`) và làm sạch XSS (`server/lib/sanitizer.js`). Thứ tự trích xuất: bộ chọn CSS riêng theo từng trang (`server/lib/siteAdapters.js`, ví dụ docln/Hako, Zuminovel) → `@mozilla/readability` → nếu nội dung tĩnh vẫn quá ít (trang nạp nội dung bằng JavaScript), tự động hiển thị lại trang bằng trình duyệt ảo Chromium headless (`lib/renderPage.js`, dùng Playwright, có SSRF guard riêng cho từng request con) → cuối cùng mới đến Gemini AI. Liên kết "chương sau" được dò bằng `server/lib/nextChapter.js` (nhiều chiến lược: `rel="next"`, bộ chọn theo trang, từ khoá, tên class/id).
++   - `/api/fetch-url`: trích xuất nội dung văn bản từ URL, chống SSRF (`lib/ssrfGuard.js`) và làm sạch XSS (`server/lib/sanitizer.js`). Thứ tự trích xuất: các bước dọn DOM riêng theo từng trang chạy trước tiên qua `adapter.preprocessDocument` (`server/lib/siteAdapters.js`) — ví dụ `unprotectHakoContent` tự giải mã khối `#chapter-c-protected` (base64 / `base64_reverse` / `xor_shuffle`, khoá theo `data-s`/`data-k`/`data-c`) mà docln.sbs/docln.net/ln.hako.vn giấu nội dung chương vào, ngay trên HTML tĩnh, không cần chạy JS của trang → rồi mới đến bộ chọn CSS riêng theo từng trang (ví dụ Zuminovel) → `@mozilla/readability` → nếu nội dung tĩnh vẫn quá ít (trang nạp nội dung bằng JavaScript theo cách khác, hoặc adapter chưa hỗ trợ), tự động hiển thị lại trang bằng trình duyệt ảo Chromium headless (`lib/renderPage.js`, dùng Playwright, có SSRF guard riêng cho từng request con) → cuối cùng mới đến Gemini AI. Liên kết "chương sau" được dò bằng `server/lib/nextChapter.js` (nhiều chiến lược: `rel="next"`, bộ chọn theo trang, từ khoá, tên class/id).
+ 
+ ---
+ 
+diff --git a/docs/security.md b/docs/security.md
+index 3ffc86e..de1dd2b 100644
+--- a/docs/security.md
++++ b/docs/security.md
+@@ -51,7 +51,7 @@ flowchart TD
+ ### 4. Server-Side Request Forgery (SSRF) Guard
+ - In `/api/fetch-url`, user-provided URLs are parsed and inspected by `lib/ssrfGuard.js` (`assertPublicHost`).
+ - Resolves DNS addresses and blocks private, loopback, link-local, and cloud metadata IP ranges (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `127.0.0.0/8`, `169.254.0.0/16`).
+-- **Headless-render fallback (`lib/renderPage.js`)**: pages whose main content is hydrated client-side (e.g. `docln.sbs`) are re-fetched through a sandboxed headless Chromium instance so their JavaScript can run. The *same* `assertPublicHost` guard re-validates the initial navigation **and every subsequent sub-request the rendered page issues** (scripts, XHR/fetch, redirects) via Playwright's request routing, so page JavaScript cannot pivot into internal/private network resources. Image/media/font requests are dropped outright (perf + reduced SSRF surface); validated hostnames are memoized per render call. As with the plain-fetch path, full DNS-rebinding immunity would require socket-level IP pinning and is out of scope — see the equivalent note in `lib/ssrfGuard.js`.
++- **Headless-render fallback (`lib/renderPage.js`)**: pages whose main content is genuinely hydrated client-side, or where a site's `preprocessDocument`/CSS-selector adapter and Readability both still come back too short, are re-fetched through a sandboxed headless Chromium instance so their JavaScript can run. Note that `docln.sbs` (and its `docln.net`/`ln.hako.vn` mirrors) is *not* actually client-hydrated — its chapter text ships obfuscated inside `#chapter-c-protected` (`data-s`/`data-k`/`data-c`) in the first static response, and is decoded in-process by `unprotectHakoContent` (`server/lib/siteAdapters.js`) ahead of this fallback; headless-render only kicks in for it as a safety net if that scheme changes again. The *same* `assertPublicHost` guard re-validates the initial navigation **and every subsequent sub-request the rendered page issues** (scripts, XHR/fetch, redirects) via Playwright's request routing, so page JavaScript cannot pivot into internal/private network resources. Image/media/font requests are dropped outright (perf + reduced SSRF surface); validated hostnames are memoized per render call. As with the plain-fetch path, full DNS-rebinding immunity would require socket-level IP pinning and is out of scope — see the equivalent note in `lib/ssrfGuard.js`.
+ 
+ ### 5. Multi-Tier Rate Limiting
+ - `server/middleware/rateLimiter.js` enforces request caps:
+diff --git a/server.js b/server.js
+index 099948b..7b1f5c3 100644
+--- a/server.js
++++ b/server.js
+@@ -177,6 +177,13 @@ function processHtml(html, finalUrl, adapter) {
+   const dom = new JSDOM(html, { url: finalUrl });
+   const document = dom.window.document;
+ 
++  // Site-specific DOM fixups (e.g. decoding docln/Hako's obfuscated
++  // #chapter-c-protected placeholder back into real HTML — see
++  // unprotectHakoContent in siteAdapters.js) must run before anything else
++  // touches the document, including next-chapter link discovery and
++  // Readability, so both see the real content instead of an empty shell.
++  adapter?.preprocessDocument?.(document);
++
+   // Must run before any extraction step, since Readability.parse() mutates
+   // the document it's given (removes scripts/"unlikely" nodes in place).
+   const nextChapterUrl = findNextChapterUrl(document, finalUrl, adapter);
+diff --git a/server/lib/siteAdapters.js b/server/lib/siteAdapters.js
+index 61e0141..72e045e 100644
+--- a/server/lib/siteAdapters.js
++++ b/server/lib/siteAdapters.js
+@@ -23,10 +23,15 @@ export const ADAPTERS = [
+     id: 'docln-hako',
+     // docln.sbs / docln.net / ln.hako.vn are the same "Hako" light-novel
+     // platform under different domains (it rotates domains periodically).
+-    // Its chapter body is hydrated client-side, so this adapter is mainly
+-    // useful *after* lib/renderPage.js has produced rendered HTML.
++    // Its chapter body is NOT plain hydrated-client-side HTML — the real
++    // text ships obfuscated inside #chapter-c-protected in the *first*
++    // static response, and preprocessDocument (unprotectHakoContent, below)
++    // decodes it before any selector below ever runs. requiresRender is
++    // kept only as a safety-net label in case the site changes its
++    // obfuscation scheme again and the decode below silently no-ops.
+     hostnames: [/(^|\.)docln\.(sbs|net)$/i, /(^|\.)ln\.hako\.(vn|re)$/i],
+     requiresRender: true,
++    preprocessDocument: unprotectHakoContent,
+     contentSelectors: ['#chapter-content', '.chapter-content', '[id^="chapter-content"]'],
+     removeSelectors: [
+       'script',
+@@ -128,3 +133,109 @@ export function extractWithAdapter(document, adapter, minLength = 100) {
+ 
+   return null;
+ }
++
++/**
++ * Decodes Hako/DocLN's "protected" chapter-content placeholder back into
++ * real HTML, in place, on a JSDOM document.
++ *
++ * docln.sbs / docln.net / ln.hako.vn no longer put chapter text directly
++ * under #chapter-content. They nest a
++ * `<div id="chapter-c-protected" data-s="..." data-k="..." data-c="[...]">`
++ * placeholder inside it instead. `data-c` is a JSON array of string chunks;
++ * each chunk starts with a 4-digit numeric prefix (the chunks don't arrive
++ * in order — the prefix is what you sort by) followed by a base64 payload
++ * that — depending on `data-s` — may additionally be reversed
++ * ("base64_reverse") or XOR'd byte-for-byte against the repeating `data-k`
++ * key ("xor_shuffle") before/after the base64 step. The site's own
++ * front-end JS decodes this client-side to populate the reader (including
++ * its own built-in "Text-to-Speech" experiment); a plain fetch never runs
++ * that script, so every downstream extraction pass — adapter selectors,
++ * Readability, even the AI fallback — was working from a near-empty shell
++ * for this site specifically.
++ *
++ * This re-implements the same three strategies already reverse-engineered,
++ * independently of each other, by two current open-source projects that
++ * target this exact site:
++ *   - https://github.com/tachibana-shin/hako-epub-extension (registry/hako.ts)
++ *   - https://github.com/AzenKain/EPUB-Forge (extensions/origin/hako2epub.js)
++ * Both landing on the same data-s/data-k/data-c shape independently is
++ * good cross-confirmation this is docln's actual current scheme.
++ *
++ * Crucially, no live JavaScript execution is required: the encoded text is
++ * already sitting in the very first static HTML response, so this can (and
++ * should) run on the fast safeFetchHtml() path — no need to reach for the
++ * much slower/heavier headless-render fallback for this site at all,
++ * unless docln changes the scheme again and this quietly starts no-op'ing.
++ *
++ * Mutates `document` in place. Safe no-op if no protected block is found
++ * or a payload doesn't parse, so it's fine to call unconditionally ahead
++ * of any extraction step.
++ *
++ * @param {Document} document A JSDOM document.
++ * @returns {number} Number of protected blocks successfully decoded.
++ */
++export function unprotectHakoContent(document) {
++  let decodedCount = 0;
++  if (!document || typeof document.querySelectorAll !== 'function') return decodedCount;
++
++  const protectedEls = document.querySelectorAll('#chapter-c-protected, [id^="chapter-c-protected"]');
++
++  protectedEls.forEach(el => {
++    try {
++      const strategy = el.getAttribute('data-s') || 'none';
++      const key = el.getAttribute('data-k') || '';
++      const rawChunks = el.getAttribute('data-c');
++      if (!rawChunks) return;
++
++      const chunks = JSON.parse(rawChunks);
++      if (!Array.isArray(chunks) || chunks.length === 0) return;
++
++      const ordered = [...chunks].sort(
++        (a, b) => parseInt(String(a).slice(0, 4), 10) - parseInt(String(b).slice(0, 4), 10)
++      );
++
++      const decodedHtml = ordered
++        .map(chunk => decodeHakoChunk(String(chunk).slice(4), strategy, key))
++        .join('')
++        // Translator footnote markers are meaningless as bare text without
++        // the site's own footnote popover — strip them rather than have
++        // the TTS voice read "[note3]" aloud mid-sentence.
++        .replace(/\[note\d+\]/gi, '');
++
++      if (!decodedHtml) return;
++
++      const wrapper = document.createElement('div');
++      wrapper.innerHTML = decodedHtml;
++      el.replaceWith(...Array.from(wrapper.childNodes));
++      decodedCount += 1;
++    } catch {
++      // Unknown/malformed payload (site changed its scheme again) — leave
++      // the element as-is; Readability/headless-render/AI fallbacks in
++      // server.js still get a chance to handle it.
++    }
++  });
++
++  return decodedCount;
++}
++
++/**
++ * @param {string} payload base64 chunk payload with its 4-digit sort prefix already stripped.
++ * @param {string} strategy 'none' | 'base64_reverse' | 'xor_shuffle'
++ * @param {string} key XOR key, only used when strategy === 'xor_shuffle'.
++ * @returns {string}
++ */
++function decodeHakoChunk(payload, strategy, key) {
++  const prepared = strategy === 'base64_reverse' ? payload.split('').reverse().join('') : payload;
++  const bytes = Buffer.from(prepared, 'base64');
++
++  if (strategy === 'xor_shuffle') {
++    if (!key) return '';
++    const out = Buffer.alloc(bytes.length);
++    for (let i = 0; i < bytes.length; i++) {
++      out[i] = bytes[i] ^ key.charCodeAt(i % key.length);
++    }
++    return out.toString('utf-8');
++  }
++
++  return bytes.toString('utf-8');
++}
+diff --git a/tests/unit/siteAdapters.test.ts b/tests/unit/siteAdapters.test.ts
+index afbd57c..2a19e18 100644
+--- a/tests/unit/siteAdapters.test.ts
++++ b/tests/unit/siteAdapters.test.ts
+@@ -1,6 +1,6 @@
+ import { describe, it, expect } from 'vitest';
+ import { JSDOM } from 'jsdom';
+-import { findAdapter, extractWithAdapter, ADAPTERS } from '../../server/lib/siteAdapters';
++import { findAdapter, extractWithAdapter, unprotectHakoContent, ADAPTERS } from '../../server/lib/siteAdapters';
+ 
+ describe('findAdapter', () => {
+   it('matches docln.sbs and its known sibling domains', () => {
+@@ -113,3 +113,77 @@ describe('extractWithAdapter', () => {
+     expect(result).not.toBeNull();
+   });
+ });
++
++describe('unprotectHakoContent', () => {
++  it('decodes an xor_shuffle payload, reassembling out-of-order chunks by their numeric prefix', () => {
++    // Fixture generated with the exact inverse of decodeHakoChunk (xor byte-for-byte
++    // against the repeating key, then base64) from two locally-authored test
++    // sentences, split into two chunks and deliberately placed out of order in
++    // the array to exercise the sort-by-prefix step.
++    const html = `<html><body><div id="chapter-content"><div id="chapter-c-protected" data-s="xor_shuffle" data-k="testkey123" data-c='["0002SBVNsPsKmIuTXVQOGpXQ5hQRRluV3t5UHw2YipsTHAQaVAwMuotCExqEyO0CRR1EXFRUE7XEit7aRRJdE6PDldDEF1YS9+WEyO1LAbqRWxMAhMjlAkUNWVvSz+YGVAaEwqhGEwAXt/cGRRLyjxMAhMjFRVlWQQw=","0001SBVNsPum20gSX7fFU7D6CpiLk11UDhqV0OYUEUZbld7eVB8NmIqbExoNks7OEVlV8YoaAlOw+oTCshJLt8QQVAUNmIufXVQHks/yRR5Y04nXDFMZqMZZWV3SzsQHVK/0mIqrXRNFt+Wo3xdWHBNISgNK"]'></div></div></body></html>`;
++    const dom = new JSDOM(html);
++
++    const count = unprotectHakoContent(dom.window.document);
++
++    expect(count).toBe(1);
++    expect(dom.window.document.querySelector('#chapter-c-protected')).toBeNull();
++    const content = dom.window.document.querySelector('#chapter-content')?.textContent || '';
++    expect(content).toContain('đoạn kiểm thử thứ nhất');
++    // Confirms ordering: prefix 0001 must land before 0002 despite arriving second in the array.
++    expect(content.indexOf('thứ nhất')).toBeLessThan(content.indexOf('thứ hai'));
++  });
++
++  it('decodes a base64_reverse payload', () => {
++    const html = `<html><body><div id="chapter-content"><div id="chapter-c-protected" data-s="base64_reverse" data-c='["0001=4DcvwjLn5Wm7GekEDSs7GOdg06uhjGdg02g7GearBSagOsYg8GajByZul7wkBCN2U2chJGIjN6uhDrxn5GIvNquhHJxgU3g7GearBSoD/GagM6wtByZuVHZgkWm7GuT+AHP"]'></div></div></body></html>`;
++    const dom = new JSDOM(html);
++
++    expect(unprotectHakoContent(dom.window.document)).toBe(1);
++    expect(dom.window.document.querySelector('#chapter-content')?.textContent).toContain(
++      'mã hoá kiểu đảo ngược base64'
++    );
++  });
++
++  it('decodes a plain base64 payload when data-s is "none" or absent', () => {
++    const html = `<html><body><div id="chapter-content"><div id="chapter-c-protected" data-c='["0001PHA+TuG7mWkgZHVuZyBjaOG7iSBtw6MgaG/DoSBiYXNlNjQgxJHGoW4gZ2nhuqNuIGtow7RuZyBjw7MgbOG7m3AgWE9SIG7DoG8gY+G6oy48L3A+"]'></div></div></body></html>`;
++    const dom = new JSDOM(html);
++
++    expect(unprotectHakoContent(dom.window.document)).toBe(1);
++    expect(dom.window.document.querySelector('#chapter-content')?.textContent).toContain(
++      'chỉ mã hoá base64 đơn giản'
++    );
++  });
++
++  it('strips literal [noteN] footnote markers from the decoded text', () => {
++    const html = `<html><body><div id="chapter-c-protected" data-c='["0001UGjhuqduIGNow7ogW25vdGUxXSB24bqrbiDEkeG7jWMgxJHGsOG7o2Mu"]'></div></body></html>`;
++    const dom = new JSDOM(html);
++
++    unprotectHakoContent(dom.window.document);
++
++    expect(dom.window.document.body.textContent).not.toContain('[note1]');
++  });
++
++  it('is a safe no-op when there is no protected element (already-plain chapters keep working)', () => {
++    const html = '<html><body><div id="chapter-content"><p>Nội dung đã ở dạng văn bản thường.</p></div></body></html>';
++    const dom = new JSDOM(html);
++
++    expect(unprotectHakoContent(dom.window.document)).toBe(0);
++    expect(dom.window.document.querySelector('#chapter-content')?.textContent).toContain(
++      'Nội dung đã ở dạng văn bản thường'
++    );
++  });
++
++  it('is a safe no-op on malformed data-c JSON instead of throwing', () => {
++    const html = `<html><body><div id="chapter-c-protected" data-c="not valid json"></div></body></html>`;
++    const dom = new JSDOM(html);
++
++    expect(() => unprotectHakoContent(dom.window.document)).not.toThrow();
++    expect(unprotectHakoContent(dom.window.document)).toBe(0);
++  });
++
++  it('leaves an xor_shuffle payload undecoded (empty) if data-k is missing', () => {
++    const html = `<html><body><div id="chapter-c-protected" data-s="xor_shuffle" data-c='["0001SBVNsPsKmIuTXVQOGpXQ5hQRRluV3t5UHw2YipsTHAQaVAwMuotCExqEyO0CRR1EXFRUE7XEit7aRRJdE6PDldDEF1YS9+WEyO1LAbqRWxMAhMjlAkUNWVvSz+YGVAaEwqhGEwAXt/cGRRLyjxMAhMjFRVlWQQw="]'></div></body></html>`;
++    const dom = new JSDOM(html);
++
++    expect(unprotectHakoContent(dom.window.document)).toBe(0);
++  });
++});
